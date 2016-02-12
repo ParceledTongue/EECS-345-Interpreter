@@ -8,27 +8,19 @@
 (define M_value
   (lambda (l state)
     (cond
-      ((null? l) (error "Tried to get the value of null."))
       ((number? l) l) ; input is a number
+      ((eq? l 'true) 'true) ; input is the boolean value true
+      ((eq? l 'true) 'false) ; input is the boolean value false
       ((symbol? l) (state-get l state)) ; input is a variable
-      ((not (pair? l)) (error "M_value is only defined for numbers, variables, expressions, and assignments."))
-      ; else it is an expression or an assignment
+      ; espressions
       ((eq? (operator l) '+) (mv-operate l state +))
       ((eq? (operator l) '-) (mv-operate l state -))
       ((eq? (operator l) '*) (mv-operate l state *))
       ((eq? (operator l) '/) (mv-operate l state quotient))
       ((eq? (operator l) '%) (mv-operate l state remainder))
+      ; assignment or declaration with assignment
       ((eq? (operator l) '=) (M_value (dec-value l) state)) ; the value of an assignment is the value being assigned
       ((and (eq? (operator l) 'var) (has-value? l)) (M_value (dec-value l) state)) ; declaration must include assignment
-      (else (error "M_value is only defined for numbers, variables, expressions, and assignments.")))))
-
-(define M_boolean
-  (lambda (l state)
-    (cond
-      ((null? l) (error "Tried to get the boolean value of null"))
-      ((eq? l 'true) 'true) ; true is true
-      ((eq? l 'false) 'false) ; false is false
-      ((not (pair? l)) (error "M_boolean is only defined for 'true, 'false, comparisons, and logical operators."))
       ; types of comparison
       ((eq? (operator l) '==) (mb-compare l state =))
       ((eq? (operator l) '>)  (mb-compare l state >))
@@ -38,8 +30,7 @@
       ; logical operations
       ((eq? (operator l) '&&) (mb-and l state))
       ((eq? (operator l) '||) (mb-or l state))
-      ((eq? (operator l) '!) (mb-not l state))
-      (else (error "M_boolean is only defined for 'true, 'false, comparisons, and logical operators."))))) 
+      ((eq? (operator l) '!) (mb-not l state)))))
 
 ; prefix notation
 (define operator car)
@@ -76,19 +67,19 @@
 ; functions for boolean "and", "or", and "not"
 (define mb-and
   (lambda (l state)
-    (if (and (eq? (M_boolean(operand1 l) state) 'true) (eq? (M_boolean(operand2 l) state) 'true))
+    (if (and (eq? (M_value(operand1 l) state) 'true) (eq? (M_value(operand2 l) state) 'true))
         'true
         'false)))
 
 (define mb-or
   (lambda (l state)
-    (if (or (eq? (M_boolean(operand1 l) state) 'true) (eq? (M_boolean(operand2 l) state) 'true))
+    (if (or (eq? (M_value(operand1 l) state) 'true) (eq? (M_value(operand2 l) state) 'true))
         'true
         'false)))
 
 (define mb-not
   (lambda (l state)
-    (if (eq? (M_boolean(operand1 l) state) 'true)
+    (if (eq? (M_value(operand1 l) state) 'true)
         'false
         'true)))
 
