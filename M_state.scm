@@ -19,7 +19,7 @@
       ; control flow statements
       ((eq? (operator l) 'if) (if (M_value (condition l) state)    ; if condition = true
                                       (M_value (st-then l) state)  ; get the value of the then part
-                                      (if (pair? (cdddr state))    ; else if it has an else
+                                      (if (pair? (cdddr l))    ; else if it has an else
                                           (M_value (st-else l) state)   ; get the value of the else part
                                           '())))                        ; else return null
       ((eq? (operator l) 'while) (if (M_value (condition l) state) ; if condition = true
