@@ -56,5 +56,21 @@
   (lambda (name state)
     (cond
       ((null? (names state)) (list (list name) (list null)))
+      ((eq? name 'return) (error "'return cannot be used as a variable name"))
       ((eq? name (car (names state))) (error 'declared "Variable is already declared"))
       (else (state-cons (state-car state) (state-declare name (state-cdr state)))))))
+
+; creates a name-value pair in a given state that represents the return value of the state
+(define state-add-return
+  (lambda (value state)
+    (list
+     (cons 'return (names state))
+     (cons value (vals state)))))
+
+; whether a given state has a return value
+(define state-has-return?
+  (lambda (state)
+    (cond
+      ((null? (names state)) #f)
+      ((eq? 'return (car (names state))) #t)
+      (else (state-has-return? (state-cdr state))))))

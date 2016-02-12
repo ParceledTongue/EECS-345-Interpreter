@@ -1,70 +1,117 @@
-; stub function that just returns the current state and has no effect, to ensure the code compiles
+(load "state.scm")
+
 (define M_state
   (lambda (statement state)
-    state))
+    (cond
+      ((null? statement) state) ; no statement
+      ((eq? (statement-type statement) 'var) ; declaration
+       (if (eq? (length statement) 2)
+           (state-declare (dec-var statement) state) ; declaration without assignment
+           (state-set (dec-var statement) (M_value (dec-value statement) state) (state-declare (dec-var statement) state)))) ; declaration with assignment
+      ((eq? (statement-type statement) '=) (state-set (dec-var statement) (M_value (dec-value statement) state) state)) ; assignment
+      ((eq? (statement-type statement) 'if) ; "if" statement
+       (if (eq? (length statement) 3)
+           (if (eq? (M_value (condition statement) state) 'true) ; statement without "else" clause
+               (M_state (st-then statement) state) ; condition was true
+               state) ; condition was false (then we just return the state since there is no "else" clause)
+           (if (eq? (M_value (condition statement) state) 'true) ; statement with "else" clause
+               (M_state (st-then statement) state) ; condition was true
+               (M_state (st-else statement) state)))) ; condition was false
+      ((eq? (statement-type statement) 'while) ; "while" statement
+       (if (eq? (M_value (condition statement) state) 'true)
+           (M_state statement (M_state (while-body statement) state)) ; condition was true
+           state)) ; condition was false
+      ((eq? (statement-type statement) 'return) (state-add-return (M_value (return-val statement) state) state))))) ; "return" statement
 
 (define M_value
   (lambda (l state)
     (cond
-      ((null? l) 0)
-      ((or (number? l) (boolean? l)) l)
-      ((or (number? (operator l)) (boolean? (operator l))) (operator l))
-      ; else it is a pair or an expression
+      ((number? l) l) ; input is a number
+      ((eq? l 'true) 'true) ; input is the boolean value true
+      ((eq? l 'false) 'false) ; input is the boolean value false
+      ((symbol? l) (state-get l state)) ; input is a variable
+      ; espressions
       ((eq? (operator l) '+) (mv-operate l state +))
       ((eq? (operator l) '-) (mv-operate l state -))
       ((eq? (operator l) '*) (mv-operate l state *))
       ((eq? (operator l) '/) (mv-operate l state quotient))
       ((eq? (operator l) '%) (mv-operate l state remainder))
-
-      ; control flow statements
-      ((eq? (operator l) 'if) (if (M_value (condition l) state)    ; if condition = true
-                                      (M_value (st-then l) state)  ; get the value of the then part
-                                      (if (pair? (cdddr l))    ; else if it has an else
-                                          (M_value (st-else l) state)   ; get the value of the else part
-                                          '())))                        ; else return null
-      ((eq? (operator l) 'while) (if (M_value (condition l) state) ; if condition = true
-                                     (M_value l (M_state l state)) ; calculate the new state and then get the value
-                                     (M_value (st-then l) state))) ; else just return the value
+      ; assignment or declaration with assignment
+      ((eq? (operator l) '=) (M_value (dec-value l) state)) ; the value of an assignment is the value being assigned
+      ((and (eq? (operator l) 'var) (has-value? l)) (M_value (dec-value l) state)) ; declaration must include assignment
       ; types of comparison
-      ((eq? (operator l) '==) (mv-operate l state =))
-      ((eq? (operator l) '>)  (mv-operate l state >))
-      ((eq? (operator l) '>=) (mv-operate l state >=))
-      ((eq? (operator l) '<)  (mv-operate l state <))
-      ((eq? (operator l) '<=) (mv-operate l state <=))
+      ((eq? (operator l) '==) (mb-compare l state =))
+      ((eq? (operator l) '>)  (mb-compare l state >))
+      ((eq? (operator l) '>=) (mb-compare l state >=))
+      ((eq? (operator l) '<)  (mb-compare l state <))
+      ((eq? (operator l) '<=) (mb-compare l state <=))
+      ((eq? (operator l) '!=) (mb-compare l state !=))
       ; logical operations
-      ((eq? (operator l) '&&) (mv-operate l state andf))
-      ((eq? (operator l) '||) (mv-operate l state orf))
-      ((eq? (operator l) '!) (not (M_value (operand1 l) state)))
+      ((eq? (operator l) '&&) (mb-and l state))
+      ((eq? (operator l) '||) (mb-or l state))
+      ((eq? (operator l) '!) (mb-not l state)))))
 
-      ; now we're looking at control flow statements
-      ((eq? (operator l) 'return) (M_value (operand1 l) state))
-      ((eq? (operator l) 'var) (if (has-value? l) (M_value (dec-value l) state) '()))
-      ((eq? (operator l) '=) (M_value (dec-value l) state))
-      ; else it is a variable
-      (else (state-get (operator l) state)))))
+; macros for statements
+(define statement-type car) ; the type of statement (e.g. "if", "=", "return", ...)
+(define dec-var cadr) ; the variable being assigned to in an assignment or declaration
+(define dec-value caddr) ; the value being assigned in an assignment or declaration
+(define return-val cadr) ; the value being returned in a "return" statement
+(define condition cadr) ; the boolean condition being evaluated in an "if" or "else" statement
+(define st-then caddr) ; the "then" statement in an "if"
+(define st-else cadddr) ; the "else" statement in an "if"
+(define while-body caddr) ; the body of a "while" statement
 
-; prefix notation
+; macros for value (prefix notation)
 (define operator car)
 (define operand1 cadr)
 (define operand2 caddr)
-(define condition cadr)
-(define st-then caddr)
-(define st-else cadddr)
 
-; shorthand for all those binary operator functions
+; shorthand for all those binary operator functions (and unary -)
 (define mv-operate
+  (lambda (l state func)
+    (cond
+      ((= (length l) 3) (mv-operate-binary l state func)) ; list has two operands
+      ((= (length l) 2) (mv-operate-unary l state func)) ; list has one operand
+      (else (error "Only binary and unary operations are supported")))))
+
+(define mv-operate-binary
   (lambda (l state func)
     (func (M_value (operand1 l) state) (M_value (operand2 l) state))))
 
-; creating functions because apparently "and" and "or" aren't functions
-(define andf
-  (lambda (a1 a2)
-    (and a1 a2)))
+(define mv-operate-unary
+  (lambda (l state func)
+    (func (M_value (operand1 l) state))))
 
-(define orf
+; shorthand for boolean comparisons
+; (we cannot use mv-operate, because we want 'true and 'false rather than #t and #f)
+(define mb-compare
+  (lambda (l state func)
+    (if (func (M_value (operand1 l) state) (M_value (operand2 l) state))
+        'true
+        'false)))
+
+(define !=
   (lambda (a1 a2)
-    (or a1 a2)))
+    (not (= a1 a2))))
+
+; functions for boolean "and", "or", and "not"
+(define mb-and
+  (lambda (l state)
+    (if (and (eq? (M_value(operand1 l) state) 'true) (eq? (M_value(operand2 l) state) 'true))
+        'true
+        'false)))
+
+(define mb-or
+  (lambda (l state)
+    (if (or (eq? (M_value(operand1 l) state) 'true) (eq? (M_value(operand2 l) state) 'true))
+        'true
+        'false)))
+
+(define mb-not
+  (lambda (l state)
+    (if (eq? (M_value(operand1 l) state) 'true)
+        'false
+        'true)))
 
 ; check if a declaration also contains an assignment
 (define has-value? (lambda (l) (pair? (cddr l))))
-(define dec-value caddr)
