@@ -1,9 +1,22 @@
 (load "state.scm")
 
-; stub function that just returns the current state and has no effect, to ensure the code compiles
 (define M_state
   (lambda (statement state)
-    state))
+    (cond
+      ((null? statement) state) ; no statement
+      ((eq? (statement-type statement) 'var) ; declaration
+       (if (eq? (length statement) 2)
+           (state-declare (dec-var statement) state) ; declaration without assignment
+           (state-set (dec-var statement) (M_value (dec-value statement) state) (state-declare (dec-var statement) state)))) ; declaration with assignment
+      ((eq? (statement-type statement) '=) (state-set (dec-var statement) (M_value (dec-value statement) state) state)) ; assignment
+      ((eq? (statement-type statement) 'if) ; "if" statement
+       (if (eq? (M_value (condition statement) state) 'true)
+           (M_state (st-then statement) state) ; condition was true
+           (M_state (st-else statement) state))) ; condition was false
+      ((eq? (statement-type statement) 'while) ; "while" statement
+       (if (eq? (M_value (condition statement) state) 'true)
+           (M_state statement (M_state (while-body statement) state)) ; condition was true
+           state))))) ; condition was false
 
 (define M_value
   (lambda (l state)
@@ -32,13 +45,19 @@
       ((eq? (operator l) '||) (mb-or l state))
       ((eq? (operator l) '!) (mb-not l state)))))
 
-; prefix notation
+; macros for statements
+(define statement-type car)
+(define dec-var cadr) ; the variable being assigned to in an assignment or declaration
+(define dec-value caddr) ; the value being assigned in an assignment or declaration
+(define condition cadr) ; the boolean condition being evaluated in an "if" or "else" statement
+(define st-then caddr) ; the "then" statement in an "if"
+(define st-else cadddr) ; the "else" statement in an "if"
+(define while-body caddr) ; the body of a "while" statement
+
+; macros for value (prefix notation)
 (define operator car)
 (define operand1 cadr)
 (define operand2 caddr)
-(define condition cadr)
-(define st-then caddr)
-(define st-else cadddr)
 
 ; shorthand for all those binary operator functions (and unary -)
 (define mv-operate
@@ -85,4 +104,3 @@
 
 ; check if a declaration also contains an assignment
 (define has-value? (lambda (l) (pair? (cddr l))))
-(define dec-value caddr) ; the value being assigned in an assignment or declaration
