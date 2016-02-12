@@ -34,7 +34,8 @@
 (define state-get
   (lambda (name state)
     (cond
-      ((null? (names state)) (error 'undeclared "Variable is undeclared"))
+      ((null? state) (error 'unknown "Unknown expression"))
+      ((null? (names state)) (error name "Variable is undeclared"))
       ((eq? name (car (names state))) (car (vals state)))
       (else (state-get name (state-cdr state))))))
 
@@ -42,7 +43,7 @@
 (define state-set
   (lambda (name value state)
     (cond
-      ((null? (names state)) (error 'undeclared "Variable is undeclared"))
+      ((null? (names state)) (error name "Variable is undeclared"))
       ((eq? name (car (names state)))
        ; replace the first entry in vals with the new value and return the entire state
        (list (names state) (replace-first (vals state) value)))
