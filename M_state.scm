@@ -16,7 +16,8 @@
       ((eq? (statement-type statement) 'while) ; "while" statement
        (if (eq? (M_value (condition statement) state) 'true)
            (M_state statement (M_state (while-body statement) state)) ; condition was true
-           state))))) ; condition was false
+           state)) ; condition was false
+      ((eq? (statement-type statement) 'return) (state-add-return (M_value (return-val statement) state) state))))) ; "return" statement
 
 (define M_value
   (lambda (l state)
@@ -46,9 +47,10 @@
       ((eq? (operator l) '!) (mb-not l state)))))
 
 ; macros for statements
-(define statement-type car)
+(define statement-type car) ; the type of statement (e.g. "if", "=", "return", ...)
 (define dec-var cadr) ; the variable being assigned to in an assignment or declaration
 (define dec-value caddr) ; the value being assigned in an assignment or declaration
+(define return-val cadr) ; the value being returned in a "return" statement
 (define condition cadr) ; the boolean condition being evaluated in an "if" or "else" statement
 (define st-then caddr) ; the "then" statement in an "if"
 (define st-else cadddr) ; the "else" statement in an "if"
