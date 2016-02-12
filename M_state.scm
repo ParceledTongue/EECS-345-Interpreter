@@ -10,9 +10,13 @@
            (state-set (dec-var statement) (M_value (dec-value statement) state) (state-declare (dec-var statement) state)))) ; declaration with assignment
       ((eq? (statement-type statement) '=) (state-set (dec-var statement) (M_value (dec-value statement) state) state)) ; assignment
       ((eq? (statement-type statement) 'if) ; "if" statement
-       (if (eq? (M_value (condition statement) state) 'true)
-           (M_state (st-then statement) state) ; condition was true
-           (M_state (st-else statement) state))) ; condition was false
+       (if (eq? (length statement) 3)
+           (if (eq? (M_value (condition statement) state) 'true) ; statement without "else" clause
+               (M_state (st-then statement) state) ; condition was true
+               state) ; condition was false (then we just return the state since there is no "else" clause)
+           (if (eq? (M_value (condition statement) state) 'true) ; statement with "else" clause
+               (M_state (st-then statement) state) ; condition was true
+               (M_state (st-else statement) state)))) ; condition was false
       ((eq? (statement-type statement) 'while) ; "while" statement
        (if (eq? (M_value (condition statement) state) 'true)
            (M_state statement (M_state (while-body statement) state)) ; condition was true
@@ -24,7 +28,7 @@
     (cond
       ((number? l) l) ; input is a number
       ((eq? l 'true) 'true) ; input is the boolean value true
-      ((eq? l 'true) 'false) ; input is the boolean value false
+      ((eq? l 'false) 'false) ; input is the boolean value false
       ((symbol? l) (state-get l state)) ; input is a variable
       ; espressions
       ((eq? (operator l) '+) (mv-operate l state +))
@@ -41,6 +45,7 @@
       ((eq? (operator l) '>=) (mb-compare l state >=))
       ((eq? (operator l) '<)  (mb-compare l state <))
       ((eq? (operator l) '<=) (mb-compare l state <=))
+      ((eq? (operator l) '!=) (mb-compare l state !=))
       ; logical operations
       ((eq? (operator l) '&&) (mb-and l state))
       ((eq? (operator l) '||) (mb-or l state))
@@ -84,6 +89,10 @@
     (if (func (M_value (operand1 l) state) (M_value (operand2 l) state))
         'true
         'false)))
+
+(define !=
+  (lambda (a1 a2)
+    (not (= a1 a2))))
 
 ; functions for boolean "and", "or", and "not"
 (define mb-and

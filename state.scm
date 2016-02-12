@@ -63,7 +63,9 @@
 ; creates a name-value pair in a given state that represents the return value of the state
 (define state-add-return
   (lambda (value state)
-    (state-cons (list 'return value) state)))
+    (list
+     (cons 'return (names state))
+     (cons value (vals state)))))
 
 ; whether a given state has a return value
 (define state-has-return?

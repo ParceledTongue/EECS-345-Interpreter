@@ -1,14 +1,19 @@
 (load "simpleParser.scm")
-(load "state.scm")
 (load "M_state.scm")
-(load "evaluate.scm")
 
-(define program (parser "tests/test1"))
+(define empty-state '(()()))
 
-; the empty state has one value - "return" - which is set to null
-(define empty-state '((return) (())))
+(define interpret
+  (lambda (filename)
+    (evaluate (parser filename) empty-state)))
 
-(define sample-state '((a b c x y z q r return) (1 2 3 4 5 6 #t #f '())))
+(define evaluate
+  (lambda (program state)
+    (cond
+      ((state-has-return? state) (state-get 'return state))
+      ((null? program) 'null) ; an empty program (the ultimate evaluation of a program without a return statement) returns 'null
+      (else (evaluate (rest-statements program) (M_state (next-statement program) state))))))
 
-; output the return value of the program
-(state-get 'return (evaluate program empty-state))
+; macros for program evaluation
+(define next-statement car)
+(define rest-statements cdr)
