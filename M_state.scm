@@ -1,3 +1,10 @@
+; EECS 345 Project #1
+; Jonah Raider-Roth (jer135)
+; Zachary Palumbo (ztp3)
+
+; Language: Pretty Big
+; To run a program, run (interpret <filename>)
+
 (load "state.scm")
 
 (define M_state
