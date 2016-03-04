@@ -14,6 +14,7 @@
   (lambda (filename)
     (evaluate-call/cc (parser filename) empty-state)))
 
+#| OLD EVALUATE FUNCTIONS (not used in this version)
 (define evaluate
   (lambda (program state)
     (cond
@@ -27,7 +28,7 @@
       ((state-has-return? state) state)
       ((null? program) state)
       (else (evaluate-state (rest-statements program) (M_state (next-statement program) state))))))
-
+|#
 (define evaluate-call/cc
   (lambda (program state)
     (call/cc
