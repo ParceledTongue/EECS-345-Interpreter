@@ -37,6 +37,12 @@
   (lambda (value state)
     (cons (layer-add-return value (top-layer state)) (other-layers state))))
 
+(define state-add-bottom-return
+  (lambda (value state)
+    (cond
+      ((null? (other-layers state)) (list (layer-add-return value (top-layer state))))
+      (else (cons (top-layer state) (state-add-bottom-return value (other-layers state)))))))
+
 (define state-has-return?
   (lambda (state)
     (cond

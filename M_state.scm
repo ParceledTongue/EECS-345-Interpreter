@@ -36,7 +36,7 @@
        (if (eq? (M_value (condition statement) state) 'true)
            (M_state statement (M_state (while-body statement) state)) ; condition was true
            state)) ; condition was false
-      ((eq? (statement-type statement) 'return) (state-add-return (M_value (return-val statement) state) state))))) ; "return" statement
+      ((eq? (statement-type statement) 'return) (state-add-bottom-return (M_value (return-val statement) state) state))))) ; "return" statement
 
 (define M_value
   (lambda (l state)
