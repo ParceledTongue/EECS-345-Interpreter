@@ -37,9 +37,11 @@
          (else (M_state (cons (statement-type statement) (rest-arguments statement)) (M_state (argument1 statement) state))))) ; else take out the first statement and apply it to the state
 |#
       ((eq? (statement-type statement) 'while) ; "while" statement
-       (if (eq? (M_value (condition statement) state) 'true)
-           (M_state statement (M_state (while-body statement) state)) ; condition was true
+       (M_state-while statement state))
+#|       (if (eq? (M_value (condition statement) state) 'true)
+           (M_state statement (evaluate-state-call/cc (list (while-body statement)) state)) ; condition was true ; evaluate-state-call/cc was M_state ; list used because while-body is a single statement that needs to be converted to a "program"
            state)) ; condition was false
+|#
       ((eq? (statement-type statement) 'return) (state-add-bottom-return (M_value (return-val statement) state) state))))) ; "return" statement
 
 (define M_value
@@ -137,3 +139,13 @@
 
 ; check if a declaration also contains an assignment
 (define has-value? (lambda (l) (pair? (cddr l))))
+
+(define M_state-while
+  (lambda (statement state)
+    (call/cc
+     (lambda (break)
+       (letrec ((loop (lambda (statement state)
+                        (if (and (eq? (M_value (condition statement) state) 'true) (not (state-has-return? state)))
+                            (loop statement (evaluate-state-call/cc (list (while-body statement)) state))
+                            (break state)))))
+         (loop statement state))))))
