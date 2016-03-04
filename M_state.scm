@@ -30,6 +30,7 @@
          (else (M_state (cons 'begin-in-layer (arguments statement)) (add-layer state)))))
       ((eq? (statement-type statement) 'begin-in-layer) ; code block which has had a new layer added for it
        (cond
+         ((state-has-return? state)
          ((null? (arguments statement)) (other-layers state)) ; if there are no arguments, pop off the top layer and return the rest
          (else (M_state (cons (statement-type statement) (rest-arguments statement)) (M_state (argument1 statement) state))))) ; else take out the first statement and apply it to the state
       ((eq? (statement-type statement) 'while) ; "while" statement

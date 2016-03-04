@@ -21,6 +21,13 @@
       ((null? program) 'null) ; an empty program (the ultimate evaluation of a program without a return statement) returns 'null
       (else (evaluate (rest-statements program) (M_state (next-statement program) state))))))
 
+(define evaluate-state ; gets the final state after a program runs
+  (lambda (program state)
+    (cond
+      ((state-has-return? state) state)
+      ((null? program) empty-state)
+      (else (evaluate-state (rest-statements program) (M_state (next-statement program) state))))))
+
 ; macros for program evaluation
 (define next-statement car)
 (define rest-statements cdr)
