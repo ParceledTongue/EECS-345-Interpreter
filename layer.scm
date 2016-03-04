@@ -47,8 +47,8 @@ TODO - implement new layer-get, layer-set
 (define layer-get
   (lambda (name layer)
     (cond
-      ((null? layer) (error 'unknown "Unknown expression"))
-      ((null? (names layer)) (error name "Variable is undeclared"))
+      ((null? layer) #f)
+      ((null? (names layer)) #f)
       ((eq? name (car (names layer))) (car (vals layer)))
       (else (layer-get name (layer-cdr layer))))))
 
@@ -56,7 +56,7 @@ TODO - implement new layer-get, layer-set
 (define layer-set
   (lambda (name value layer)
     (cond
-      ((null? (names layer)) (error name "Variable is undeclared"))
+      ((null? (names layer)) #f)
       ((eq? name (car (names layer)))
        ; replace the first entry in vals with the new value and return the entire layer
        (list (names layer) (replace-first (vals layer) value)))
