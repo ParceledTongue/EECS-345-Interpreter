@@ -19,7 +19,7 @@
   (lambda (name state)
     (cond
       ((null? state) (error name "Unknown expression"))
-      ((layer-get name (top-layer state)) (layer-get name (top-layer state))) ; TODO make this better
+      ((layer-get name (top-layer state)) (layer-get name (top-layer state))) ; if the top layer contains the variable, just return it
       (else (state-get name (other-layers state))))))
 
 (define state-set
@@ -33,7 +33,7 @@
  (lambda (name state)
    (cons (layer-declare name (top-layer state)) (other-layers state))))
 
-(define state-add-return
+(define state-add-return ; not used in this version
   (lambda (value state)
     (cons (layer-add-return value (top-layer state)) (other-layers state))))
 
