@@ -1,11 +1,11 @@
-; EECS 345 Project #1
+; EECS 345 Project #2
 ; Jonah Raider-Roth (jer135)
 ; Zachary Palumbo (ztp3)
 
 ; Language: Pretty Big
 ; To run a program, run (interpret <filename>)
 
-(load "state.scm")
+(load "layered-state.scm")
 
 (define M_state
   (lambda (statement state)

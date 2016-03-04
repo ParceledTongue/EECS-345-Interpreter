@@ -1,4 +1,4 @@
-; EECS 345 Project #1
+; EECS 345 Project #2
 ; Jonah Raider-Roth (jer135)
 ; Zachary Palumbo (ztp3)
 
