@@ -1,11 +1,11 @@
-; EECS 345 Project #1
+; EECS 345 Project #2
 ; Jonah Raider-Roth (jer135)
 ; Zachary Palumbo (ztp3)
 
 ; Language: Pretty Big
 ; To run a program, run (interpret <filename>)
 
-(load "state.scm")
+(load "layered-state.scm")
 
 (define M_state
   (lambda (statement state)
@@ -24,11 +24,11 @@
            (if (eq? (M_value (condition statement) state) 'true) ; statement with "else" clause
                (M_state (st-then statement) state) ; condition was true
                (M_state (st-else statement) state)))) ; condition was false
+      ((eq? (statement-type statement) 'begin) ; code block that hasn't been examined yet
+        (other-layers (evaluate-state-call/cc (arguments statement) (add-layer state))))
       ((eq? (statement-type statement) 'while) ; "while" statement
-       (if (eq? (M_value (condition statement) state) 'true)
-           (M_state statement (M_state (while-body statement) state)) ; condition was true
-           state)) ; condition was false
-      ((eq? (statement-type statement) 'return) (state-add-return (M_value (return-val statement) state) state))))) ; "return" statement
+       (M_state-while statement state))
+      ((eq? (statement-type statement) 'return) (state-add-bottom-return (M_value (return-val statement) state) state))))) ; "return" statement
 
 (define M_value
   (lambda (l state)
@@ -37,7 +37,7 @@
       ((eq? l 'true) 'true) ; input is the boolean value true
       ((eq? l 'false) 'false) ; input is the boolean value false
       ((symbol? l) (state-get l state)) ; input is a variable
-      ; espressions
+      ; expressions
       ((eq? (operator l) '+) (mv-operate l state +))
       ((eq? (operator l) '-) (mv-operate l state -))
       ((eq? (operator l) '*) (mv-operate l state *))
@@ -70,6 +70,9 @@
 
 ; macros for value (prefix notation)
 (define operator car)
+(define arguments cdr)
+(define argument1 cadr)
+(define rest-arguments cddr)    
 (define operand1 cadr)
 (define operand2 caddr)
 
@@ -122,3 +125,14 @@
 
 ; check if a declaration also contains an assignment
 (define has-value? (lambda (l) (pair? (cddr l))))
+
+; M_state for while loops
+(define M_state-while
+  (lambda (statement state)
+    (call/cc
+     (lambda (break)
+       (letrec ((loop (lambda (statement state)
+                        (if (and (eq? (M_value (condition statement) state) 'true) (not (state-has-return? state)))
+                            (loop statement (evaluate-state-call/cc (list (while-body statement)) state))
+                            (break state)))))
+         (loop statement state))))))

@@ -1,11 +1,11 @@
-; EECS 345 Project #2
+; EECS 345 Project #1
 ; Jonah Raider-Roth (jer135)
 ; Zachary Palumbo (ztp3)
 
 ; Language: Pretty Big
 ; To run a program, run (interpret <filename>)
 
-; ======== layer IMPLEMENTATION ========
+; ======== STATE LAYER IMPLEMENTATION ========
 
 ; the layer list has two sublists containing names and valuess ("vals"), respectively
 ; for example, the layerments (x = 1; y = 2; z = 3;) would yield the layer:
@@ -49,7 +49,7 @@ TODO - implement new layer-get, layer-set
     (cond
       ((null? layer) #f)
       ((null? (names layer)) #f)
-      ((eq? name (car (names layer))) (car (vals layer)))
+      ((eq? name (car (names layer))) (unbox (car (vals layer))))
       (else (layer-get name (layer-cdr layer))))))
 
 ; edits the value associated with the given name in a given layer, and returns the new layer
@@ -59,7 +59,7 @@ TODO - implement new layer-get, layer-set
       ((null? (names layer)) #f)
       ((eq? name (car (names layer)))
        ; replace the first entry in vals with the new value and return the entire layer
-       (list (names layer) (replace-first (vals layer) value)))
+       (list (names layer) (replace-first (vals layer) (box value))))
       (else (layer-cons
              (layer-car layer)
              (layer-set name value (layer-cdr layer)))))))
@@ -68,7 +68,7 @@ TODO - implement new layer-get, layer-set
 (define layer-declare
   (lambda (name layer)
     (cond
-      ((null? (names layer)) (list (list name) (list null)))
+      ((null? (names layer)) (list (list name) (list (box null))))
       ((eq? name 'return) (error "'return cannot be used as a variable name"))
       ((eq? name (car (names layer))) (error 'declared "Variable is already declared"))
       (else (layer-cons (layer-car layer) (layer-declare name (layer-cdr layer)))))))
@@ -78,7 +78,7 @@ TODO - implement new layer-get, layer-set
   (lambda (value layer)
     (list
      (cons 'return (names layer))
-     (cons value (vals layer)))))
+     (cons (box value) (vals layer)))))
 
 ; whether a given layer has a return value
 (define layer-has-return?
