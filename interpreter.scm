@@ -14,21 +14,6 @@
   (lambda (filename)
     (evaluate-call/cc (parser filename) empty-state)))
 
-#| OLD EVALUATE FUNCTIONS (not used in this version)
-(define evaluate
-  (lambda (program state)
-    (cond
-      ((state-has-return? state) (state-get 'return state))
-      ((null? program) 'null) ; an empty program (the ultimate evaluation of a program without a return statement) returns 'null
-      (else (evaluate (rest-statements program) (M_state (next-statement program) state))))))
-
-(define evaluate-state ; gets the final state after a program runs; only used inside of code blocks
-  (lambda (program state)
-    (cond
-      ((state-has-return? state) state)
-      ((null? program) state)
-      (else (evaluate-state (rest-statements program) (M_state (next-statement program) state))))))
-|#
 (define evaluate-call/cc
   (lambda (program state)
     (call/cc
