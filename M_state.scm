@@ -24,6 +24,14 @@
            (if (eq? (M_value (condition statement) state) 'true) ; statement with "else" clause
                (M_state (st-then statement) state) ; condition was true
                (M_state (st-else statement) state)))) ; condition was false
+      ((eq? (statement-type statement) 'begin) ; code block that hasn't been examined yet
+       (cond
+         ((null? (arguments statement)) state)
+         (else (M_state (cons 'begin-in-layer (arguments statement)) (add-layer state)))))
+      ((eq? (statement-type statement) 'begin-in-layer) ; code block which has had a new layer added for it
+       (cond
+         ((null? (arguments statement)) (other-layers state)) ; if there are no arguments, pop off the top layer and return the rest
+         (else (M_state (cons (statement-type statement) (rest-arguments statement)) (M_state (argument1 statement) state))))) ; else take out the first statement and apply it to the state
       ((eq? (statement-type statement) 'while) ; "while" statement
        (if (eq? (M_value (condition statement) state) 'true)
            (M_state statement (M_state (while-body statement) state)) ; condition was true
@@ -37,7 +45,7 @@
       ((eq? l 'true) 'true) ; input is the boolean value true
       ((eq? l 'false) 'false) ; input is the boolean value false
       ((symbol? l) (state-get l state)) ; input is a variable
-      ; espressions
+      ; expressions
       ((eq? (operator l) '+) (mv-operate l state +))
       ((eq? (operator l) '-) (mv-operate l state -))
       ((eq? (operator l) '*) (mv-operate l state *))
@@ -70,6 +78,9 @@
 
 ; macros for value (prefix notation)
 (define operator car)
+(define arguments cdr)
+(define argument1 cadr)
+(define rest-arguments cddr)    
 (define operand1 cadr)
 (define operand2 caddr)
 

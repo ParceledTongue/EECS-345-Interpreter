@@ -8,7 +8,7 @@
 (load "simpleParser.scm")
 (load "M_state.scm")
 
-(define empty-state '(()()))
+(define empty-state '((()())))
 
 (define interpret
   (lambda (filename)

@@ -9,7 +9,7 @@
 
 (define new-state '( ( () () ) ))
 (define new-layer '(()()))
-(define sample-state '(((x)(2))((y)(3))))
+(define sample-state '(((x z)(2 4))((y a)(3 5))))
 
 (define add-layer (lambda (state) (cons new-layer state)))
 (define top-layer car)
@@ -18,6 +18,28 @@
 (define state-get
   (lambda (name state)
     (cond
-      ((null? state) (error 'unknown "Unknown expression"))
+      ((null? state) (error name "Unknown expression"))
       ((layer-get name (top-layer state)) (layer-get name (top-layer state))) ; TODO make this better
       (else (state-get name (other-layers state))))))
+
+(define state-set
+  (lambda (name value state)
+    (cond
+      ((null? state) (error name "Unknown expression"))
+      ((layer-get name (top-layer state)) (cons (layer-set name value (top-layer state)) (other-layers state)))
+      (else (cons (top-layer state) (state-set name value (other-layers state)))))))
+
+(define state-declare
+ (lambda (name state)
+   (cons (layer-declare name (top-layer state)) (other-layers state))))
+
+(define state-add-return
+  (lambda (value state)
+    (cons (layer-add-return value (top-layer state)) (other-layers state))))
+
+(define state-has-return?
+  (lambda (state)
+    (cond
+      ((null? state) #f)
+      ((layer-has-return? (top-layer state)) #t)
+      (else (state-has-return? (other-layers state))))))
