@@ -28,6 +28,14 @@
        (state-add-bottom-break state))
       ((eq? (statement-type statement) 'continue) ; "continue" instruction
        (state-add-bottom-continue state))
+      ((eq? (statement-type statement) 'begin) ; code block that hasn't been examined yet
+        (other-layers (evaluate-state-call/cc (arguments statement) (add-layer state))))
+      ((eq? (statement-type statement) 'while) ; "while" statement
+       (M_state-while statement state))
+      ((eq? (statement-type statement) 'try)
+       (M_state-try (try-part statement) (catch-part statement) (finally-part statement) state))
+;      ((eq? (statement-type statement) 'throw)
+;       (error (operand1 statement) "Thrown error outside try/catch"))
       ((eq? (statement-type statement) 'return) ; "return" statement
        (state-add-bottom-return (M_value (return-val statement) state) state)))))
 
@@ -56,7 +64,39 @@
                state) ; condition was false (then we just return the state since there is no "else" clause)
            (if (eq? (M_value (condition statement) state) 'true) ; statement with "else" clause
                (M_state (st-then statement) state) ; condition was true
-               (M_state (st-else statement) state)))))
+               (M_state (st-else statement) state))))) ; condition was false
+
+; M_state for finally blocks
+(define M_state-finally
+  (lambda (finally state)
+    (cond
+      ((null? finally) state)
+      (else (M_state-finally (rest-statements finally) (M_state (next-statement finally) state))))))
+
+; M_state for catch blocks
+(define M_state-catch
+  (lambda (cbody finally cstate)
+      (cond
+        ((and (null? cbody) (null? finally)) cstate)
+        ((null? cbody) (M_state-finally finally cstate))
+        (else (M_state-catch (rest-statements cbody) finally (M_state (next-statement cbody) cstate))))))
+
+; M_state for try blocks
+(define M_state-try
+  (lambda (body catch finally state)
+;    (other-layers
+     (call/cc
+      (lambda (break)
+        (letrec ((loop (lambda (body catch finally state)
+                         (cond
+                           ((state-has-return? state) (break state))
+                           ((state-has-thrown? state) (break (M_state-catch catch finally (state-add-bottom-thrown (operand1 (next-statement body)))))) 
+                           ((null? body) (break (M_state-finally (cadr finally) state)))
+                           ((eq? (operator (next-statement body)) 'throw) (break
+                                                                           (let* ((cbody (catch-contents catch)) (cvar (catch-var catch)) (cstate (state-set cvar (operand1 (next-statement body)) (state-declare cvar state))))
+                                                                              (M_state-catch cbody finally state)))); (state-add-bottom-thrown (operand1 (next-statement body)) state)))))
+                           (else (loop (rest-statements body) catch finally (M_state (next-statement body) state)))))))
+          (loop body catch finally (add-layer state)))))))
 
 ; M_value
 (define M_value
@@ -104,6 +144,15 @@
 (define rest-arguments cddr)    
 (define operand1 cadr)
 (define operand2 caddr)
+(define trystmt2 caaddr)
+(define next-statement car)
+(define rest-statements cdr)
+(define catch-contents cddr)
+(define catch-var caadr)
+
+(define try-part cadr)
+(define catch-part caddr)
+(define finally-part cadddr)
 
 ; shorthand for all those binary operator functions (and unary -)
 (define mv-operate

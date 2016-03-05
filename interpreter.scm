@@ -24,8 +24,9 @@
                           ((state-has-break? state) (error "You cannot break outside of a loop."))
                           ((state-has-continue? state) (error "You cannot continue outside of a loop."))
                           ((state-has-return? state) (break (state-get 'return state)))
+                          ; ((state-has-thrown? state) (error (state-get 'thrown state) "Thrown error"))
                           ((null? program) 'null)
-                          (else (evaluate-call/cc (rest-statements program) (M_state (next-statement program) state)))))))
+                          (else (loop (rest-statements program) (M_state (next-statement program) state)))))))
          (loop program state))))))
 
 ; return the state resulting from executing the list of statements in program.
@@ -36,6 +37,8 @@
        (letrec ((loop (lambda (program state)
                             (cond
                               ((or (or (state-has-return? state) (state-has-break? state)) (state-has-continue? state)) (break state))
+                              ((state-has-return? state) (break state))
+                              ((state-has-thrown? state) (error (state-get 'thrown state) "Thrown error"))
                               ((null? program) state)
                               (else (loop (rest-statements program) (M_state (next-statement program) state)))))))
                 (loop program state))))))

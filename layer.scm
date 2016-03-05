@@ -49,7 +49,7 @@ TODO - implement new layer-get, layer-set
     (cond
       ((null? layer) #f)
       ((null? (names layer)) #f)
-      ((eq? name (car (names layer))) (unbox (car (vals layer))))
+      ((eq? name (car (names layer))) (car (vals layer)))
       (else (layer-get name (layer-cdr layer))))))
 
 ; edits the value associated with the given name in a given layer, and returns the new layer
@@ -59,7 +59,7 @@ TODO - implement new layer-get, layer-set
       ((null? (names layer)) #f)
       ((eq? name (car (names layer)))
        ; replace the first entry in vals with the new value and return the entire layer
-       (list (names layer) (replace-first (vals layer) (box value))))
+       (list (names layer) (replace-first (vals layer) value)))
       (else (layer-cons
              (layer-car layer)
              (layer-set name value (layer-cdr layer)))))))
@@ -68,7 +68,7 @@ TODO - implement new layer-get, layer-set
 (define layer-declare
   (lambda (name layer)
     (cond
-      ((null? (names layer)) (list (list name) (list (box null))))
+      ((null? (names layer)) (list (list name) (list null)))
       ((eq? name 'return) (error "'return cannot be used as a variable name"))
       ((eq? name (car (names layer))) (error 'declared "Variable is already declared"))
       (else (layer-cons (layer-car layer) (layer-declare name (layer-cdr layer)))))))
@@ -78,7 +78,13 @@ TODO - implement new layer-get, layer-set
   (lambda (value layer)
     (list
      (cons 'return (names layer))
-     (cons (box value) (vals layer)))))
+     (cons value (vals layer)))))
+
+(define layer-add-thrown
+  (lambda (value layer)
+    (list
+     (cons 'thrown (names layer))
+     (cons value (vals layer)))))
 
 ; creates a name-value pair in a given layer that represents a break
 (define layer-add-break
@@ -133,3 +139,10 @@ TODO - implement new layer-get, layer-set
       ((null? (car (names layer))) (error "The layer has no continue indicator."))
       ((eq? (car (names layer)) 'continue) (layer-cdr layer))
       (else (layer-cons (layer-car layer) (layer-remove-continue layer))))))
+
+(define layer-has-thrown?
+  (lambda (layer)
+    (cond
+      ((null? (names layer)) #f)
+      ((eq? 'thrown (car (names layer))) #t)
+      (else (layer-has-thrown? (layer-cdr layer))))))
