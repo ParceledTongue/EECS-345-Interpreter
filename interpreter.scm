@@ -36,8 +36,9 @@
        (letrec ((loop (lambda (program state)
                         (cond
                           ((state-has-return? state) (break (state-get 'return state)))
+                          ((state-has-thrown? state) (error (state-get 'thrown state) "Thrown error"))
                           ((null? program) 'null)
-                          (else (evaluate-call/cc (rest-statements program) (M_state (next-statement program) state)))))))
+                          (else (loop (rest-statements program) (M_state (next-statement program) state)))))))
          (loop program state))))))
 
 (define evaluate-state-call/cc
@@ -47,6 +48,7 @@
        (letrec ((loop (lambda (program state)
                             (cond
                               ((state-has-return? state) (break state))
+                              ((state-has-thrown? state) (error (state-get 'thrown state) "Thrown error"))
                               ((null? program) state)
                               (else (loop (rest-statements program) (M_state (next-statement program) state)))))))
                 (loop program state))))))

@@ -43,9 +43,22 @@
       ((null? (other-layers state)) (list (layer-add-return value (top-layer state))))
       (else (cons (top-layer state) (state-add-bottom-return value (other-layers state)))))))
 
+(define state-add-bottom-thrown
+  (lambda (value state)
+    (cond
+      ((null? (other-layers state)) (list (layer-add-thrown value (top-layer state))))
+      (else (cons (top-layer state) (state-add-bottom-thrown value (other-layers state)))))))
+
 (define state-has-return?
   (lambda (state)
     (cond
       ((null? state) #f)
       ((layer-has-return? (top-layer state)) #t)
       (else (state-has-return? (other-layers state))))))
+
+(define state-has-thrown?
+  (lambda (state)
+    (cond
+      ((null? state) #f)
+      ((layer-has-thrown? (top-layer state)) #t)
+      (else (state-has-thrown? (other-layers state))))))
