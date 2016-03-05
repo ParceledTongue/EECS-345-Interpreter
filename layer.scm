@@ -80,6 +80,20 @@ TODO - implement new layer-get, layer-set
      (cons 'return (names layer))
      (cons (box value) (vals layer)))))
 
+; creates a name-value pair in a given layer that represents a break
+(define layer-add-break
+  (lambda (layer)
+    (list
+     (cons 'break (names layer))
+     (cons '() (vals layer)))))
+
+; creates a name-value pair in a given layer that represents a break
+(define layer-add-continue
+  (lambda (layer)
+    (list
+     (cons 'continue (names layer))
+     (cons '() (vals layer)))))
+
 ; whether a given layer has a return value
 (define layer-has-return?
   (lambda (layer)
@@ -87,3 +101,35 @@ TODO - implement new layer-get, layer-set
       ((null? (names layer)) #f)
       ((eq? 'return (car (names layer))) #t)
       (else (layer-has-return? (layer-cdr layer))))))
+
+; whether a given layer has a break indicator
+(define layer-has-break?
+  (lambda (layer)
+    (cond
+      ((null? (names layer)) #f)
+      ((eq? 'break (car (names layer))) #t)
+      (else (layer-has-break? (layer-cdr layer))))))
+
+; whether a given layer has a continue indicator
+(define layer-has-continue?
+  (lambda (layer)
+    (cond
+      ((null? (names layer)) #f)
+      ((eq? 'continue (car (names layer))) #t)
+      (else (layer-has-continue? (layer-cdr layer))))))
+
+; remove the break indicator from the current layer
+(define layer-remove-break
+  (lambda (layer)
+    (cond
+      ((null? (car (names layer))) (error "The layer has no break indicator."))
+      ((eq? (car (names layer)) 'break) (layer-cdr layer))
+      (else (layer-cons (layer-car layer) (layer-remove-break layer))))))
+
+; remove the continue indicator from the current layer
+(define layer-remove-continue
+  (lambda (layer)
+    (cond
+      ((null? (car (names layer))) (error "The layer has no continue indicator."))
+      ((eq? (car (names layer)) 'continue) (layer-cdr layer))
+      (else (layer-cons (layer-car layer) (layer-remove-continue layer))))))

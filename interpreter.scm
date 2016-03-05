@@ -14,24 +14,28 @@
   (lambda (filename)
     (evaluate-call/cc (parser filename) empty-state)))
 
+; get the return value of the program
 (define evaluate-call/cc
   (lambda (program state)
     (call/cc
      (lambda (break)
        (letrec ((loop (lambda (program state)
                         (cond
+                          ((state-has-break? state) (error "You cannot break outside of a loop."))
+                          ((state-has-continue? state) (error "You cannot continue outside of a loop."))
                           ((state-has-return? state) (break (state-get 'return state)))
                           ((null? program) 'null)
                           (else (evaluate-call/cc (rest-statements program) (M_state (next-statement program) state)))))))
          (loop program state))))))
 
+; return the state resulting from executing the list of statements in program.
 (define evaluate-state-call/cc
   (lambda (program state)
     (call/cc
      (lambda (break)
        (letrec ((loop (lambda (program state)
                             (cond
-                              ((state-has-return? state) (break state))
+                              ((or (or (state-has-return? state) (state-has-break? state)) (state-has-continue? state)) (break state))
                               ((null? program) state)
                               (else (loop (rest-statements program) (M_state (next-statement program) state)))))))
                 (loop program state))))))

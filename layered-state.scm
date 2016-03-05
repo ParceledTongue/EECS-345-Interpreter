@@ -33,15 +33,23 @@
  (lambda (name state)
    (cons (layer-declare name (top-layer state)) (other-layers state))))
 
-(define state-add-return ; not used in this version
-  (lambda (value state)
-    (cons (layer-add-return value (top-layer state)) (other-layers state))))
-
 (define state-add-bottom-return
   (lambda (value state)
     (cond
       ((null? (other-layers state)) (list (layer-add-return value (top-layer state))))
       (else (cons (top-layer state) (state-add-bottom-return value (other-layers state)))))))
+
+(define state-add-bottom-break
+  (lambda (state)
+    (cond
+      ((null? (other-layers state)) (list (layer-add-break (top-layer state))))
+      (else (cons (top-layer state) (state-add-bottom-break (other-layers state)))))))
+
+(define state-add-bottom-continue
+  (lambda (state)
+    (cond
+      ((null? (other-layers state)) (list (layer-add-continue (top-layer state))))
+      (else (cons (top-layer state) (state-add-bottom-continue (other-layers state)))))))
 
 (define state-has-return?
   (lambda (state)
@@ -49,3 +57,31 @@
       ((null? state) #f)
       ((layer-has-return? (top-layer state)) #t)
       (else (state-has-return? (other-layers state))))))
+
+(define state-has-break?
+  (lambda (state)
+    (cond
+      ((null? state) #f)
+      ((layer-has-break? (top-layer state)) #t)
+      (else (state-has-break? (other-layers state))))))
+
+(define state-has-continue?
+  (lambda (state)
+    (cond
+      ((null? state) #f)
+      ((layer-has-continue? (top-layer state)) #t)
+      (else (state-has-continue? (other-layers state))))))
+
+(define state-remove-break
+  (lambda (state)
+    (cond
+      ((null? state) (error "The state contains no break indicator."))
+      ((layer-has-break? (top-layer state)) (list (layer-remove-break (top-layer state))))
+      (else (cons (top-layer state) (state-remove-break (other-layers state)))))))
+
+(define state-remove-continue
+  (lambda (state)
+    (cond
+      ((null? state) (error "The state contains no continue indicator."))
+      ((layer-has-continue? (top-layer state)) (list (layer-remove-continue (top-layer state))))
+      (else (cons (top-layer state) (state-remove-continue (other-layers state)))))))

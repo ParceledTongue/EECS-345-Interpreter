@@ -28,6 +28,8 @@
         (other-layers (evaluate-state-call/cc (arguments statement) (add-layer state))))
       ((eq? (statement-type statement) 'while) ; "while" statement
        (M_state-while statement state))
+      ((eq? (statement-type statement) 'break) (state-add-bottom-break state))
+      ((eq? (statement-type statement) 'continue) (state-add-bottom-continue state))
       ((eq? (statement-type statement) 'return) (state-add-bottom-return (M_value (return-val statement) state) state))))) ; "return" statement
 
 (define M_value
@@ -131,8 +133,13 @@
   (lambda (statement state)
     (call/cc
      (lambda (break)
-       (letrec ((loop (lambda (statement state)
-                        (if (and (eq? (M_value (condition statement) state) 'true) (not (state-has-return? state)))
-                            (loop statement (evaluate-state-call/cc (list (while-body statement)) state))
-                            (break state)))))
-         (loop statement state))))))
+       (letrec ((loop (lambda (state)
+                        (cond
+                          ((state-has-return? state) (break state))
+                          ((state-has-break? state) (break (state-remove-break state)))
+                          ((state-has-continue? state) (loop (state-remove-continue state)))
+                          (else
+                           (if (eq? (M_value (condition statement) state) 'true)
+                               (loop (evaluate-state-call/cc (list (while-body statement)) state))
+                               (break state)))))))
+         (loop state))))))
