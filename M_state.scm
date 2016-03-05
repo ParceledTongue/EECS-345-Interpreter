@@ -7,6 +7,7 @@
 
 (load "layered-state.scm")
 
+; M_state
 (define M_state
   (lambda (statement state)
     (cond
@@ -15,23 +16,49 @@
        (if (eq? (length statement) 2)
            (state-declare (dec-var statement) state) ; declaration without assignment
            (state-set (dec-var statement) (M_value (dec-value statement) state) (state-declare (dec-var statement) state)))) ; declaration with assignment
-      ((eq? (statement-type statement) '=) (state-set (dec-var statement) (M_value (dec-value statement) state) state)) ; assignment
+      ((eq? (statement-type statement) '=) ; assignment
+       (state-set (dec-var statement) (M_value (dec-value statement) state) state))
       ((eq? (statement-type statement) 'if) ; "if" statement
-       (if (eq? (length statement) 3)
+       (M_state-if statement state))
+      ((eq? (statement-type statement) 'begin) ; code block that hasn't been examined yet
+        (other-layers (evaluate-state-call/cc (arguments statement) (add-layer state))))
+      ((eq? (statement-type statement) 'while) ; "while" statement
+       (M_state-while statement state))
+      ((eq? (statement-type statement) 'break) ; "break" instruction
+       (state-add-bottom-break state))
+      ((eq? (statement-type statement) 'continue) ; "continue" instruction
+       (state-add-bottom-continue state))
+      ((eq? (statement-type statement) 'return) ; "return" statement
+       (state-add-bottom-return (M_value (return-val statement) state) state)))))
+
+; M_state for while loops
+(define M_state-while
+  (lambda (statement state)
+    (call/cc
+     (lambda (break)
+       (letrec ((loop (lambda (state)
+                        (cond
+                          ((state-has-return? state) (break state))
+                          ((state-has-break? state) (break (state-remove-break state)))
+                          ((state-has-continue? state) (loop (state-remove-continue state)))
+                          (else
+                           (if (eq? (M_value (condition statement) state) 'true)
+                               (loop (evaluate-state-call/cc (list (while-body statement)) state))
+                               (break state)))))))
+         (loop state))))))
+
+; M_state for if statements
+(define M_state-if
+  (lambda (statement state)
+    (if (eq? (length statement) 3)
            (if (eq? (M_value (condition statement) state) 'true) ; statement without "else" clause
                (M_state (st-then statement) state) ; condition was true
                state) ; condition was false (then we just return the state since there is no "else" clause)
            (if (eq? (M_value (condition statement) state) 'true) ; statement with "else" clause
                (M_state (st-then statement) state) ; condition was true
-               (M_state (st-else statement) state)))) ; condition was false
-      ((eq? (statement-type statement) 'begin) ; code block that hasn't been examined yet
-        (other-layers (evaluate-state-call/cc (arguments statement) (add-layer state))))
-      ((eq? (statement-type statement) 'while) ; "while" statement
-       (M_state-while statement state))
-      ((eq? (statement-type statement) 'break) (state-add-bottom-break state))
-      ((eq? (statement-type statement) 'continue) (state-add-bottom-continue state))
-      ((eq? (statement-type statement) 'return) (state-add-bottom-return (M_value (return-val statement) state) state))))) ; "return" statement
+               (M_state (st-else statement) state)))))
 
+; M_value
 (define M_value
   (lambda (l state)
     (cond
@@ -127,19 +154,3 @@
 
 ; check if a declaration also contains an assignment
 (define has-value? (lambda (l) (pair? (cddr l))))
-
-; M_state for while loops
-(define M_state-while
-  (lambda (statement state)
-    (call/cc
-     (lambda (break)
-       (letrec ((loop (lambda (state)
-                        (cond
-                          ((state-has-return? state) (break state))
-                          ((state-has-break? state) (break (state-remove-break state)))
-                          ((state-has-continue? state) (loop (state-remove-continue state)))
-                          (else
-                           (if (eq? (M_value (condition statement) state) 'true)
-                               (loop (evaluate-state-call/cc (list (while-body statement)) state))
-                               (break state)))))))
-         (loop state))))))
