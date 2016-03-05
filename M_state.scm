@@ -34,8 +34,8 @@
        (M_state-while statement state))
       ((eq? (statement-type statement) 'try)
        (M_state-try (try-part statement) (catch-part statement) (finally-part statement) state))
-;      ((eq? (statement-type statement) 'throw)
-;       (error (operand1 statement) "Thrown error outside try/catch"))
+      ((eq? (statement-type statement) 'throw)
+       (state-add-bottom-thrown (M_value (operand1 statement) state) state))
       ((eq? (statement-type statement) 'return) ; "return" statement
        (state-add-bottom-return (M_value (return-val statement) state) state)))))
 
@@ -78,25 +78,28 @@
   (lambda (cbody finally cstate)
       (cond
         ((and (null? cbody) (null? finally)) cstate)
-        ((null? cbody) (M_state-finally finally cstate))
+        ((null? cbody) (M_state-finally (cadr finally) cstate))
         (else (M_state-catch (rest-statements cbody) finally (M_state (next-statement cbody) cstate))))))
 
 ; M_state for try blocks
 (define M_state-try
   (lambda (body catch finally state)
-;    (other-layers
+    (other-layers
      (call/cc
       (lambda (break)
         (letrec ((loop (lambda (body catch finally state)
                          (cond
                            ((state-has-return? state) (break state))
-                           ((state-has-thrown? state) (break (M_state-catch catch finally (state-add-bottom-thrown (operand1 (next-statement body)))))) 
+                           ((state-has-thrown? state) ;(break (M_state-catch catch finally (state-add-bottom-thrown (operand1 (next-statement body)) state))))
+                            (break
+                               (let* ((cbody (catch-contents catch)) (cvar (catch-var catch)) (cstate (state-set cvar (state-get 'thrown state) (state-declare cvar state))))
+                                 (M_state-catch (car cbody) finally cstate))));
                            ((null? body) (break (M_state-finally (cadr finally) state)))
                            ((eq? (operator (next-statement body)) 'throw) (break
                                                                            (let* ((cbody (catch-contents catch)) (cvar (catch-var catch)) (cstate (state-set cvar (operand1 (next-statement body)) (state-declare cvar state))))
-                                                                              (M_state-catch cbody finally state)))); (state-add-bottom-thrown (operand1 (next-statement body)) state)))))
+                                                                              (M_state-catch (car cbody) finally cstate)))); (state-add-bottom-thrown (operand1 (next-statement body)) state)))))
                            (else (loop (rest-statements body) catch finally (M_state (next-statement body) state)))))))
-          (loop body catch finally (add-layer state)))))))
+          (loop body catch finally (add-layer state))))))))
 
 ; M_value
 (define M_value

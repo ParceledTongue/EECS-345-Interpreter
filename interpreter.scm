@@ -38,7 +38,7 @@
                             (cond
                               ((or (or (state-has-return? state) (state-has-break? state)) (state-has-continue? state)) (break state))
                               ((state-has-return? state) (break state))
-                              ((state-has-thrown? state) (error (state-get 'thrown state) "Thrown error"))
+                              ((state-has-thrown? state) (error "Thrown error"))
                               ((null? program) state)
                               (else (loop (rest-statements program) (M_state (next-statement program) state)))))))
                 (loop program state))))))
