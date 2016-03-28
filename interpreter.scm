@@ -5,7 +5,7 @@
 ; Language: Pretty Big
 ; To run a program, run (interpret <filename>)
 
-(load "simpleParser.scm")
+(load "functionParser.scm")
 (load "M_state.scm")
 
 (define empty-state '((()())))
