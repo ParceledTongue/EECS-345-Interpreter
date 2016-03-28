@@ -49,7 +49,7 @@ TODO - implement new layer-get, layer-set
     (cond
       ((null? layer) #f)
       ((null? (names layer)) #f)
-      ((eq? name (car (names layer))) (unbox (car (vals layer))))
+      ((eq? name (car (names layer))) (car (vals layer)))
       (else (layer-get name (layer-cdr layer))))))
 
 ; edits the value associated with the given name in a given layer, and returns the new layer
@@ -59,7 +59,7 @@ TODO - implement new layer-get, layer-set
       ((null? (names layer)) #f)
       ((eq? name (car (names layer)))
        ; replace the first entry in vals with the new value and return the entire layer
-       (list (names layer) (replace-first (vals layer) (box value))))
+       (list (names layer) (replace-first (vals layer) value)))
       (else (layer-cons
              (layer-car layer)
              (layer-set name value (layer-cdr layer)))))))
@@ -68,7 +68,7 @@ TODO - implement new layer-get, layer-set
 (define layer-declare
   (lambda (name layer)
     (cond
-      ((null? (names layer)) (list (list name) (list (box null))))
+      ((null? (names layer)) (list (list name) (list null)))
       ((eq? name 'return) (error "'return cannot be used as a variable name"))
       ((eq? name (car (names layer))) (error 'declared "Variable is already declared"))
       (else (layer-cons (layer-car layer) (layer-declare name (layer-cdr layer)))))))
@@ -78,7 +78,27 @@ TODO - implement new layer-get, layer-set
   (lambda (value layer)
     (list
      (cons 'return (names layer))
-     (cons (box value) (vals layer)))))
+     (cons value (vals layer)))))
+
+(define layer-add-thrown
+  (lambda (value layer)
+    (list
+     (cons 'thrown (names layer))
+     (cons value (vals layer)))))
+
+; creates a name-value pair in a given layer that represents a break
+(define layer-add-break
+  (lambda (layer)
+    (list
+     (cons 'break (names layer))
+     (cons '() (vals layer)))))
+
+; creates a name-value pair in a given layer that represents a break
+(define layer-add-continue
+  (lambda (layer)
+    (list
+     (cons 'continue (names layer))
+     (cons '() (vals layer)))))
 
 ; whether a given layer has a return value
 (define layer-has-return?
@@ -87,3 +107,42 @@ TODO - implement new layer-get, layer-set
       ((null? (names layer)) #f)
       ((eq? 'return (car (names layer))) #t)
       (else (layer-has-return? (layer-cdr layer))))))
+
+; whether a given layer has a break indicator
+(define layer-has-break?
+  (lambda (layer)
+    (cond
+      ((null? (names layer)) #f)
+      ((eq? 'break (car (names layer))) #t)
+      (else (layer-has-break? (layer-cdr layer))))))
+
+; whether a given layer has a continue indicator
+(define layer-has-continue?
+  (lambda (layer)
+    (cond
+      ((null? (names layer)) #f)
+      ((eq? 'continue (car (names layer))) #t)
+      (else (layer-has-continue? (layer-cdr layer))))))
+
+; remove the break indicator from the current layer
+(define layer-remove-break
+  (lambda (layer)
+    (cond
+      ((null? (car (names layer))) (error "The layer has no break indicator."))
+      ((eq? (car (names layer)) 'break) (layer-cdr layer))
+      (else (layer-cons (layer-car layer) (layer-remove-break layer))))))
+
+; remove the continue indicator from the current layer
+(define layer-remove-continue
+  (lambda (layer)
+    (cond
+      ((null? (car (names layer))) (error "The layer has no continue indicator."))
+      ((eq? (car (names layer)) 'continue) (layer-cdr layer))
+      (else (layer-cons (layer-car layer) (layer-remove-continue layer))))))
+
+(define layer-has-thrown?
+  (lambda (layer)
+    (cond
+      ((null? (names layer)) #f)
+      ((eq? 'thrown (car (names layer))) #t)
+      (else (layer-has-thrown? (layer-cdr layer))))))

@@ -7,6 +7,7 @@
 
 (load "layered-state.scm")
 
+; M_state
 (define M_state
   (lambda (statement state)
     (cond
@@ -15,21 +16,92 @@
        (if (eq? (length statement) 2)
            (state-declare (dec-var statement) state) ; declaration without assignment
            (state-set (dec-var statement) (M_value (dec-value statement) state) (state-declare (dec-var statement) state)))) ; declaration with assignment
-      ((eq? (statement-type statement) '=) (state-set (dec-var statement) (M_value (dec-value statement) state) state)) ; assignment
+      ((eq? (statement-type statement) '=) ; assignment
+       (state-set (dec-var statement) (M_value (dec-value statement) state) state))
       ((eq? (statement-type statement) 'if) ; "if" statement
-       (if (eq? (length statement) 3)
+       (M_state-if statement state))
+      ((eq? (statement-type statement) 'begin) ; code block that hasn't been examined yet
+        (other-layers (evaluate-state-call/cc (arguments statement) (add-layer state))))
+      ((eq? (statement-type statement) 'while) ; "while" statement
+       (M_state-while statement state))
+      ((eq? (statement-type statement) 'break) ; "break" instruction
+       (state-add-bottom-break state))
+      ((eq? (statement-type statement) 'continue) ; "continue" instruction
+       (state-add-bottom-continue state))
+      ((eq? (statement-type statement) 'begin) ; code block that hasn't been examined yet
+        (other-layers (evaluate-state-call/cc (arguments statement) (add-layer state))))
+      ((eq? (statement-type statement) 'while) ; "while" statement
+       (M_state-while statement state))
+      ((eq? (statement-type statement) 'try)
+       (M_state-try (try-part statement) (catch-part statement) (finally-part statement) state))
+      ((eq? (statement-type statement) 'throw)
+       (state-add-bottom-thrown (M_value (operand1 statement) state) state))
+      ((eq? (statement-type statement) 'return) ; "return" statement
+       (state-add-bottom-return (M_value (return-val statement) state) state)))))
+
+; M_state for while loops
+(define M_state-while
+  (lambda (statement state)
+    (call/cc
+     (lambda (break)
+       (letrec ((loop (lambda (state)
+                        (cond
+                          ((state-has-return? state) (break state))
+                          ((state-has-break? state) (break (state-remove-break state)))
+                          ((state-has-continue? state) (loop (state-remove-continue state)))
+                          (else
+                           (if (eq? (M_value (condition statement) state) 'true)
+                               (loop (evaluate-state-call/cc (list (while-body statement)) state))
+                               (break state)))))))
+         (loop state))))))
+
+; M_state for if statements
+(define M_state-if
+  (lambda (statement state)
+    (if (eq? (length statement) 3)
            (if (eq? (M_value (condition statement) state) 'true) ; statement without "else" clause
                (M_state (st-then statement) state) ; condition was true
                state) ; condition was false (then we just return the state since there is no "else" clause)
            (if (eq? (M_value (condition statement) state) 'true) ; statement with "else" clause
                (M_state (st-then statement) state) ; condition was true
-               (M_state (st-else statement) state)))) ; condition was false
-      ((eq? (statement-type statement) 'begin) ; code block that hasn't been examined yet
-        (other-layers (evaluate-state-call/cc (arguments statement) (add-layer state))))
-      ((eq? (statement-type statement) 'while) ; "while" statement
-       (M_state-while statement state))
-      ((eq? (statement-type statement) 'return) (state-add-bottom-return (M_value (return-val statement) state) state))))) ; "return" statement
+               (M_state (st-else statement) state))))) ; condition was false
 
+; M_state for finally blocks
+(define M_state-finally
+  (lambda (finally state)
+    (cond
+      ((null? finally) state)
+      (else (M_state-finally (rest-statements finally) (M_state (next-statement finally) state))))))
+
+; M_state for catch blocks
+(define M_state-catch
+  (lambda (cbody finally cstate)
+      (cond
+        ((and (null? cbody) (null? finally)) cstate)
+        ((null? cbody) (M_state-finally (cadr finally) cstate))
+        (else (M_state-catch (rest-statements cbody) finally (M_state (next-statement cbody) cstate))))))
+
+; M_state for try blocks
+(define M_state-try
+  (lambda (body catch finally state)
+    (other-layers
+     (call/cc
+      (lambda (break)
+        (letrec ((loop (lambda (body catch finally state)
+                         (cond
+                           ((state-has-return? state) (break state))
+                           ((state-has-thrown? state) ;(break (M_state-catch catch finally (state-add-bottom-thrown (operand1 (next-statement body)) state))))
+                            (break
+                               (let* ((cbody (catch-contents catch)) (cvar (catch-var catch)) (cstate (state-set cvar (state-get 'thrown state) (state-declare cvar state))))
+                                 (M_state-catch (car cbody) finally cstate))));
+                           ((null? body) (break (M_state-finally (cadr finally) state)))
+                           ((eq? (operator (next-statement body)) 'throw) (break
+                                                                           (let* ((cbody (catch-contents catch)) (cvar (catch-var catch)) (cstate (state-set cvar (operand1 (next-statement body)) (state-declare cvar state))))
+                                                                              (M_state-catch (car cbody) finally cstate)))); (state-add-bottom-thrown (operand1 (next-statement body)) state)))))
+                           (else (loop (rest-statements body) catch finally (M_state (next-statement body) state)))))))
+          (loop body catch finally (add-layer state))))))))
+
+; M_value
 (define M_value
   (lambda (l state)
     (cond
@@ -75,6 +147,15 @@
 (define rest-arguments cddr)    
 (define operand1 cadr)
 (define operand2 caddr)
+(define trystmt2 caaddr)
+(define next-statement car)
+(define rest-statements cdr)
+(define catch-contents cddr)
+(define catch-var caadr)
+
+(define try-part cadr)
+(define catch-part caddr)
+(define finally-part cadddr)
 
 ; shorthand for all those binary operator functions (and unary -)
 (define mv-operate
@@ -125,14 +206,3 @@
 
 ; check if a declaration also contains an assignment
 (define has-value? (lambda (l) (pair? (cddr l))))
-
-; M_state for while loops
-(define M_state-while
-  (lambda (statement state)
-    (call/cc
-     (lambda (break)
-       (letrec ((loop (lambda (statement state)
-                        (if (and (eq? (M_value (condition statement) state) 'true) (not (state-has-return? state)))
-                            (loop statement (evaluate-state-call/cc (list (while-body statement)) state))
-                            (break state)))))
-         (loop statement state))))))
