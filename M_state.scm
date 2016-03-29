@@ -7,6 +7,9 @@
 
 (load "layered-state.scm")
 
+; check if a declaration also contains an assignment
+(define has-value? (lambda (l) (pair? (cddr l))))
+
 ; M_state
 (define M_state
   (lambda (statement state)
@@ -128,7 +131,9 @@
       ; logical operations
       ((eq? (operator l) '&&) (mb-and l state))
       ((eq? (operator l) '||) (mb-or l state))
-      ((eq? (operator l) '!) (mb-not l state)))))
+      ((eq? (operator l) '!) (mb-not l state))
+      ; function calls
+      ((eq? (operator l) 'funcall) (mv-function (funcall-name l) (funcall-args l) state)))))
 
 ; macros for statements
 (define statement-type car) ; the type of statement (e.g. "if", "=", "return", ...)
@@ -139,6 +144,11 @@
 (define st-then caddr) ; the "then" statement in an "if"
 (define st-else cadddr) ; the "else" statement in an "if"
 (define while-body caddr) ; the body of a "while" statement
+(define funcall-name cadr) ; for function calls
+(define funcall-args cddr)
+(define funcdec-name cadr) ; for function declarations
+(define funcdec-formals caddr)
+(define funcdec-text cdddr) ; the actual code run inside of a function
 
 ; macros for value (prefix notation)
 (define operator car)
@@ -204,5 +214,28 @@
         'false
         'true)))
 
-; check if a declaration also contains an assignment
-(define has-value? (lambda (l) (pair? (cddr l))))
+;;;;;;;; function calls ;;;;;;;;;
+
+; return the value of a function given the function name, actual params, and state
+; (this is the umbrella function for this section)
+(define mv-function
+  (lambda (name args state)
+    (evaluate-call/cc (funcdec-text (state-get name state)) (function-env name args state))))
+
+; bind actual params to formal params and include these bindings in a state containing all variables in scope (adding a new layer)
+(define function-env
+  (lambda (name args state)
+    (function-build-env args (function-formals name state) (add-layer state))))
+
+; recursively bind a list of function arguments to their respective formal parameters
+(define function-build-env
+  (lambda (args formals state)
+    (cond
+      ((and (null? args) (null? formals)) state)
+      ((or  (null? args) (null? formals)) (error 'arguments "Wrong number of arguments provided"))
+      (else (state-declare-and-set (car formals) (M_value (car args)) state)))))
+
+; return a list of the formal parameters of a given function in a given state
+(define function-formals
+  (lambda (name state)
+    (funcdec-formals (state-get name state))))

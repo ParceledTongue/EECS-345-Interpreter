@@ -33,6 +33,10 @@
  (lambda (name state)
    (cons (layer-declare name (top-layer state)) (other-layers state))))
 
+(define state-declare-and-set
+  (lambda (name value state)
+    (state-set name value (state-declare name state))))
+
 (define state-add-bottom-return
   (lambda (value state)
     (cond
