@@ -44,31 +44,40 @@ TODO - implement new layer-get, layer-set
     (cons value (cdr l))))
 
 ; returns the value associated with the given name in a given layer
-(define layer-get
+(define layer-get-box
   (lambda (name layer)
     (cond
       ((null? layer) #f)
       ((null? (names layer)) #f)
       ((eq? name (car (names layer))) (car (vals layer)))
+      (else (layer-get-box name (layer-cdr layer))))))
+
+(define layer-get
+  (lambda (name layer)
+    (cond
+      ((null? layer) #f)
+      ((null? (names layer)) #f)
+      ((eq? name (car (names layer))) (unbox (car (vals layer))))
       (else (layer-get name (layer-cdr layer))))))
 
 ; edits the value associated with the given name in a given layer, and returns the new layer
 (define layer-set
   (lambda (name value layer)
-    (cond
-      ((null? (names layer)) #f)
-      ((eq? name (car (names layer)))
-       ; replace the first entry in vals with the new value and return the entire layer
-       (list (names layer) (replace-first (vals layer) value)))
-      (else (layer-cons
-             (layer-car layer)
-             (layer-set name value (layer-cdr layer)))))))
+      (cond
+        ((null? (names layer)) #f)
+        ((eq? name (car (names layer)))
+         ; replace the first entry in vals with the new value and return the entire layer
+         (begin (set-box! (car (vals layer)) value) layer))
+        (else (layer-cons
+               (layer-car layer)
+               (layer-set name value (layer-cdr layer)))))))
+    
 
 ; creates a new name-value pair in a given layer with the given name and the value '(), and returns the new layer
 (define layer-declare
   (lambda (name layer)
     (cond
-      ((null? (names layer)) (list (list name) (list null)))
+      ((null? (names layer)) (list (list name) (list (box null))))
       ((eq? name 'return) (error "'return cannot be used as a variable name"))
       ((eq? name (car (names layer))) (error 'declared "Variable is already declared"))
       (else (layer-cons (layer-car layer) (layer-declare name (layer-cdr layer)))))))

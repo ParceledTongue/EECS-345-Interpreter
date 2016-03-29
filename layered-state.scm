@@ -9,7 +9,7 @@
 
 (define new-state '( ( () () ) ))
 (define new-layer '(()()))
-(define sample-state '(((x z)(2 4))((y a)(3 5))))
+(define sample-state (list (list (list 'x 'z)(list (box 2) (box 4)))(list (list 'y 'a)(list (box 3) (box 5)))))
 
 (define add-layer (lambda (state) (cons new-layer state)))
 (define top-layer car)
