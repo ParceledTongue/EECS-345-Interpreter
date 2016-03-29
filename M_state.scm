@@ -40,7 +40,12 @@
       ((eq? (statement-type statement) 'throw)
        (state-add-bottom-thrown (M_value (operand1 statement) state) state))
       ((eq? (statement-type statement) 'return) ; "return" statement
-       (state-add-bottom-return (M_value (return-val statement) state) state)))))
+       (state-add-bottom-return (M_value (return-val statement) state) state))
+      ((eq? (statement-type statement) 'funcall)
+       (ms-function (funcall-name statement) (funcall-args statement) state))
+      ((eq? (statement-type statement) 'function) ; declaring a function is similar to declaring a variable
+       (state-declare-and-set (funcdec-name statement) statement)) ; since the statement is the same as the function description, save the entire statement
+        ;((eq? (operator l) 'funcall) (mv-function (funcall-name l) (funcall-args l) state)))))
 
 ; M_state for while loops
 (define M_state-while
@@ -221,6 +226,10 @@
 (define mv-function
   (lambda (name args state)
     (evaluate-call/cc (funcdec-text (state-get name state)) (function-env name args state))))
+
+(define ms-function
+  (lambda (name args state)
+    (evaluate-state-call/cc (funcdec-text (state-get name state)) (function-env name args state))))
 
 ; bind actual params to formal params and include these bindings in a state containing all variables in scope (adding a new layer)
 (define function-env
