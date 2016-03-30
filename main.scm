@@ -13,10 +13,26 @@
 ; This section contains the high-level program interpretation and evaluation functions
 
 (define empty-state '((()())))
+(define main-call '(funcall main))
 
 (define interpret
   (lambda (filename)
-    (evaluate-call/cc (parser filename) empty-state)))
+    ((lambda (program)
+       (return-main program (make-outer-layer program empty-state)))
+     (parser filename))))
+     
+
+; create the outer layer of the program state
+(define make-outer-layer
+  (lambda (program state)
+    (if (null? program)
+        state
+        (make-outer-layer (rest-statements program) (M_state (next-statement program) state)))))
+
+; return the value returned by the main method
+(define return-main
+  (lambda (program state)
+    (M_value main-call state)))
 
 ; get the return value of the program
 (define evaluate-call/cc
@@ -90,7 +106,7 @@
       ((eq? (statement-type statement) 'funcall)
        (ms-function (funcall-name statement) (funcall-args statement) state))
       ((eq? (statement-type statement) 'function) ; declaring a function is similar to declaring a variable
-       (state-declare-and-set (funcdec-name statement) statement))))) ; since the statement is the same as the function description, save the entire statement
+       (state-declare-and-set (funcdec-name statement) statement state))))) ; since the statement is the same as the function description, save the entire statement
 
 ; check if a declaration also contains an assignment
 (define has-value? (lambda (l) (pair? (cddr l))))
@@ -201,7 +217,7 @@
 (define funcall-args cddr)
 (define funcdec-name cadr) ; for function declarations
 (define funcdec-formals caddr)
-(define funcdec-text cdddr) ; the actual code run inside of a function
+(define funcdec-text cadddr) ; the actual code run inside of a function
 
 ; macros for value (prefix notation)
 (define operator car)
