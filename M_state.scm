@@ -44,8 +44,7 @@
       ((eq? (statement-type statement) 'funcall)
        (ms-function (funcall-name statement) (funcall-args statement) state))
       ((eq? (statement-type statement) 'function) ; declaring a function is similar to declaring a variable
-       (state-declare-and-set (funcdec-name statement) statement)) ; since the statement is the same as the function description, save the entire statement
-        ;((eq? (operator l) 'funcall) (mv-function (funcall-name l) (funcall-args l) state)))))
+       (state-declare-and-set (funcdec-name statement) statement))))) ; since the statement is the same as the function description, save the entire statement
 
 ; M_state for while loops
 (define M_state-while
@@ -223,13 +222,14 @@
 
 ; return the value of a function given the function name, actual params, and state
 ; (this is the umbrella function for this section)
+; TODO make it so it only gets the part of the state that's in scope
 (define mv-function
   (lambda (name args state)
     (evaluate-call/cc (funcdec-text (state-get name state)) (function-env name args state))))
 
 (define ms-function
   (lambda (name args state)
-    (evaluate-state-call/cc (funcdec-text (state-get name state)) (function-env name args state))))
+    (other-layers (evaluate-state-call/cc (funcdec-text (state-get name state)) (function-env name args state)))))
 
 ; bind actual params to formal params and include these bindings in a state containing all variables in scope (adding a new layer)
 (define function-env
@@ -242,7 +242,7 @@
     (cond
       ((and (null? args) (null? formals)) state)
       ((or  (null? args) (null? formals)) (error 'arguments "Wrong number of arguments provided"))
-      (else (state-declare-and-set (car formals) (M_value (car args)) state)))))
+      (else (state-declare-and-set (car formals) (M_value (car args)) (function-build-env (cdr args) (cdr formals) state))))))
 
 ; return a list of the formal parameters of a given function in a given state
 (define function-formals
