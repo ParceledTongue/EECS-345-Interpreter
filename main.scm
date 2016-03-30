@@ -307,7 +307,7 @@
     (cond
       ((and (null? args) (null? formals)) state)
       ((or  (null? args) (null? formals)) (error 'arguments "Wrong number of arguments provided"))
-      (else (state-declare-and-set (car formals) (M_value (car args)) (function-build-env (cdr args) (cdr formals) state))))))
+      (else (state-declare-and-set (car formals) (M_value (car args) state) (function-build-env (cdr args) (cdr formals) state))))))
 
 ; return a list of the formal parameters of a given function in a given state
 (define function-formals
