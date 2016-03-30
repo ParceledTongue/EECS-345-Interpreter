@@ -1,14 +1,60 @@
-; EECS 345 Project #2
+; EECS 345 Project #3
 ; Jonah Raider-Roth (jer135)
 ; Zachary Palumbo (ztp3)
 
 ; Language: Pretty Big
 ; To run a program, run (interpret <filename>)
 
-(load "layered-state.scm")
+(load "functionParser.scm")
 
-; check if a declaration also contains an assignment
-(define has-value? (lambda (l) (pair? (cddr l))))
+; ; ; ; ; ; ; ;
+; INTERPRETER ;
+; ; ; ; ; ; ; ;
+; This section contains the high-level program interpretation and evaluation functions
+
+(define empty-state '((()())))
+
+(define interpret
+  (lambda (filename)
+    (evaluate-call/cc (parser filename) empty-state)))
+
+; get the return value of the program
+(define evaluate-call/cc
+  (lambda (program state)
+    (call/cc
+     (lambda (break)
+       (letrec ((loop (lambda (program state)
+                        (cond
+                          ((state-has-break? state) (error "You cannot break outside of a loop."))
+                          ((state-has-continue? state) (error "You cannot continue outside of a loop."))
+                          ((state-has-return? state) (break (state-get 'return state)))
+                          ; ((state-has-thrown? state) (error (state-get 'thrown state) "Thrown error"))
+                          ((null? program) 'null)
+                          (else (loop (rest-statements program) (M_state (next-statement program) state)))))))
+         (loop program state))))))
+
+; return the state resulting from executing the list of statements in program.
+(define evaluate-state-call/cc
+  (lambda (program state)
+    (call/cc
+     (lambda (break)
+       (letrec ((loop (lambda (program state)
+                            (cond
+                              ((or (or (state-has-return? state) (state-has-break? state)) (state-has-continue? state)) (break state))
+                              ((state-has-return? state) (break state))
+                              ((state-has-thrown? state) (error "Thrown error"))
+                              ((null? program) state)
+                              (else (loop (rest-statements program) (M_state (next-statement program) state)))))))
+                (loop program state))))))
+
+; macros for program evaluation
+(define next-statement car)
+(define rest-statements cdr)
+
+; ; ; ; ; ; ; ; ; ; ;
+; MSTATE AND MVALUE ;
+; ; ; ; ; ; ; ; ; ; ;
+; This section contains the M_state and M_value functions and all their helpers
 
 ; M_state
 (define M_state
@@ -45,6 +91,9 @@
        (ms-function (funcall-name statement) (funcall-args statement) state))
       ((eq? (statement-type statement) 'function) ; declaring a function is similar to declaring a variable
        (state-declare-and-set (funcdec-name statement) statement))))) ; since the statement is the same as the function description, save the entire statement
+
+; check if a declaration also contains an assignment
+(define has-value? (lambda (l) (pair? (cddr l))))
 
 ; M_state for while loops
 (define M_state-while
@@ -248,3 +297,259 @@
 (define function-formals
   (lambda (name state)
     (funcdec-formals (state-get name state))))
+
+; ; ; ; ;
+; STATE ;
+; ; ; ; ;
+; This section contains functions which modify and examine states
+
+(define new-state '( ( () () ) ))
+(define new-layer '(()()))
+
+(define sample-state (list (list (list 'x 'z)(list (box 2) (box 4)))(list (list 'y 'a)(list (box 3) (box 5)))))
+
+(define add-layer (lambda (state) (cons new-layer state)))
+(define top-layer car)
+(define other-layers cdr)
+
+(define state-get
+  (lambda (name state)
+    (cond
+      ((null? state) (error name "Unknown expression"))
+      ((layer-get name (top-layer state)) (layer-get name (top-layer state))) ; if the top layer contains the variable, just return it
+      (else (state-get name (other-layers state))))))
+
+(define state-set
+  (lambda (name value state)
+    (cond
+      ((null? state) (error name "Unknown expression"))
+      ((layer-get name (top-layer state)) (cons (layer-set name value (top-layer state)) (other-layers state)))
+      (else (cons (top-layer state) (state-set name value (other-layers state)))))))
+
+(define state-declare
+ (lambda (name state)
+   (cons (layer-declare name (top-layer state)) (other-layers state))))
+
+(define state-declare-and-set
+  (lambda (name value state)
+    (state-set name value (state-declare name state))))
+
+(define state-add-bottom-return
+  (lambda (value state)
+    (cond
+      ((null? (other-layers state)) (list (layer-add-return value (top-layer state))))
+      (else (cons (top-layer state) (state-add-bottom-return value (other-layers state)))))))
+
+(define state-add-bottom-break
+  (lambda (state)
+    (cond
+      ((null? (other-layers state)) (list (layer-add-break (top-layer state))))
+      (else (cons (top-layer state) (state-add-bottom-break (other-layers state)))))))
+
+(define state-add-bottom-continue
+  (lambda (state)
+    (cond
+      ((null? (other-layers state)) (list (layer-add-continue (top-layer state))))
+      (else (cons (top-layer state) (state-add-bottom-continue (other-layers state)))))))
+
+(define state-add-bottom-thrown
+  (lambda (value state)
+    (cond
+      ((null? (other-layers state)) (list (layer-add-thrown value (top-layer state))))
+      (else (cons (top-layer state) (state-add-bottom-thrown value (other-layers state)))))))
+
+(define state-has-return?
+  (lambda (state)
+    (cond
+      ((null? state) #f)
+      ((layer-has-return? (top-layer state)) #t)
+      (else (state-has-return? (other-layers state))))))
+
+(define state-has-break?
+  (lambda (state)
+    (cond
+      ((null? state) #f)
+      ((layer-has-break? (top-layer state)) #t)
+      (else (state-has-break? (other-layers state))))))
+
+(define state-has-continue?
+  (lambda (state)
+    (cond
+      ((null? state) #f)
+      ((layer-has-continue? (top-layer state)) #t)
+      (else (state-has-continue? (other-layers state))))))
+
+(define state-has-thrown?
+  (lambda (state)
+    (cond
+      ((null? state) #f)
+      ((layer-has-thrown? (top-layer state)) #t)
+      (else (state-has-thrown? (other-layers state))))))
+
+(define state-remove-break
+  (lambda (state)
+    (cond
+      ((null? state) (error "The state contains no break indicator."))
+      ((layer-has-break? (top-layer state)) (list (layer-remove-break (top-layer state))))
+      (else (cons (top-layer state) (state-remove-break (other-layers state)))))))
+
+(define state-remove-continue
+  (lambda (state)
+    (cond
+      ((null? state) (error "The state contains no continue indicator."))
+      ((layer-has-continue? (top-layer state)) (list (layer-remove-continue (top-layer state))))
+      (else (cons (top-layer state) (state-remove-continue (other-layers state)))))))
+
+; ; ; ; ;
+; LAYER ;
+; ; ; ; ;
+; This section contains functions which modify and examine layers
+
+; the layer list has two sublists containing names and valuess ("vals"), respectively
+; for example, the layerments (x = 1; y = 2; z = 3;) would yield the layer:
+; '((x y z) (1 2 3))
+
+#|
+
+TODO - implement new layer-get, layer-set
+
+|#
+
+(define names  car)
+(define vals   cadr)
+
+
+; returns the first name-value pair in layer
+(define layer-car
+  (lambda (layer)
+    (list (car (names layer)) (car (vals layer)))))
+
+; returns all the name-value pairs in layer except the first
+(define layer-cdr
+  (lambda (layer)
+    (list (cdr (names layer)) (cdr (vals layer)))))
+
+; inserts the given name-value pair into a layer which does not already contain that pair
+(define layer-cons
+  (lambda (pair layer)
+    (list
+     (cons (names pair) (names layer))
+     (cons (vals pair) (vals layer)))))
+
+; replaces the first item in a list with a different item
+(define replace-first
+  (lambda (l value)
+    (cons value (cdr l))))
+
+; returns the value associated with the given name in a given layer
+(define layer-get-box
+  (lambda (name layer)
+    (cond
+      ((null? layer) #f)
+      ((null? (names layer)) #f)
+      ((eq? name (car (names layer))) (car (vals layer)))
+      (else (layer-get-box name (layer-cdr layer))))))
+
+(define layer-get
+  (lambda (name layer)
+    (cond
+      ((null? layer) #f)
+      ((null? (names layer)) #f)
+      ((eq? name (car (names layer))) (unbox (car (vals layer))))
+      (else (layer-get name (layer-cdr layer))))))
+
+; edits the value associated with the given name in a given layer, and returns the new layer
+(define layer-set
+  (lambda (name value layer)
+      (cond
+        ((null? (names layer)) #f)
+        ((eq? name (car (names layer)))
+         ; replace the first entry in vals with the new value and return the entire layer
+         (begin (set-box! (car (vals layer)) value) layer))
+        (else (layer-cons
+               (layer-car layer)
+               (layer-set name value (layer-cdr layer)))))))
+    
+
+; creates a new name-value pair in a given layer with the given name and the value '(), and returns the new layer
+(define layer-declare
+  (lambda (name layer)
+    (cond
+      ((null? (names layer)) (list (list name) (list (box null))))
+      ((eq? name 'return) (error "'return cannot be used as a variable name"))
+      ((eq? name (car (names layer))) (error 'declared "Variable is already declared"))
+      (else (layer-cons (layer-car layer) (layer-declare name (layer-cdr layer)))))))
+
+; creates a name-value pair in a given layer that represents the return value of the layer
+(define layer-add-return
+  (lambda (value layer)
+    (list
+     (cons 'return (names layer))
+     (cons value (vals layer)))))
+
+(define layer-add-thrown
+  (lambda (value layer)
+    (list
+     (cons 'thrown (names layer))
+     (cons value (vals layer)))))
+
+; creates a name-value pair in a given layer that represents a break
+(define layer-add-break
+  (lambda (layer)
+    (list
+     (cons 'break (names layer))
+     (cons '() (vals layer)))))
+
+; creates a name-value pair in a given layer that represents a break
+(define layer-add-continue
+  (lambda (layer)
+    (list
+     (cons 'continue (names layer))
+     (cons '() (vals layer)))))
+
+; whether a given layer has a return value
+(define layer-has-return?
+  (lambda (layer)
+    (cond
+      ((null? (names layer)) #f)
+      ((eq? 'return (car (names layer))) #t)
+      (else (layer-has-return? (layer-cdr layer))))))
+
+; whether a given layer has a break indicator
+(define layer-has-break?
+  (lambda (layer)
+    (cond
+      ((null? (names layer)) #f)
+      ((eq? 'break (car (names layer))) #t)
+      (else (layer-has-break? (layer-cdr layer))))))
+
+; whether a given layer has a continue indicator
+(define layer-has-continue?
+  (lambda (layer)
+    (cond
+      ((null? (names layer)) #f)
+      ((eq? 'continue (car (names layer))) #t)
+      (else (layer-has-continue? (layer-cdr layer))))))
+
+; remove the break indicator from the current layer
+(define layer-remove-break
+  (lambda (layer)
+    (cond
+      ((null? (car (names layer))) (error "The layer has no break indicator."))
+      ((eq? (car (names layer)) 'break) (layer-cdr layer))
+      (else (layer-cons (layer-car layer) (layer-remove-break layer))))))
+
+; remove the continue indicator from the current layer
+(define layer-remove-continue
+  (lambda (layer)
+    (cond
+      ((null? (car (names layer))) (error "The layer has no continue indicator."))
+      ((eq? (car (names layer)) 'continue) (layer-cdr layer))
+      (else (layer-cons (layer-car layer) (layer-remove-continue layer))))))
+
+(define layer-has-thrown?
+  (lambda (layer)
+    (cond
+      ((null? (names layer)) #f)
+      ((eq? 'thrown (car (names layer))) #t)
+      (else (layer-has-thrown? (layer-cdr layer))))))
