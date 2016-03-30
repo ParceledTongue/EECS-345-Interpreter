@@ -501,27 +501,27 @@ TODO - implement new layer-get, layer-set
   (lambda (value layer)
     (list
      (cons 'return (names layer))
-     (cons value (vals layer)))))
+     (cons (box value) (vals layer)))))
 
 (define layer-add-thrown
   (lambda (value layer)
     (list
      (cons 'thrown (names layer))
-     (cons value (vals layer)))))
+     (cons (box value) (vals layer)))))
 
 ; creates a name-value pair in a given layer that represents a break
 (define layer-add-break
   (lambda (layer)
     (list
      (cons 'break (names layer))
-     (cons '() (vals layer)))))
+     (cons (box '()) (vals layer)))))
 
 ; creates a name-value pair in a given layer that represents a break
 (define layer-add-continue
   (lambda (layer)
     (list
      (cons 'continue (names layer))
-     (cons '() (vals layer)))))
+     (cons (box '()) (vals layer)))))
 
 ; whether a given layer has a return value
 (define layer-has-return?
