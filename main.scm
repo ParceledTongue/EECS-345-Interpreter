@@ -5,7 +5,7 @@
 ; Language: Pretty Big
 ; To run a program, run (interpret <filename>)
 
-(load "functionParser.scm")
+(load "classParser.scm")
 
 ; ; ; ; ; ; ; ;
 ; INTERPRETER ;
