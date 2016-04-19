@@ -105,8 +105,8 @@
        (state-add-bottom-return (M_value (return-val statement) state) state))
       ((eq? (statement-type statement) 'funcall)
        (ms-function (funcall-name statement) (funcall-args statement) state))
-      ((eq? (statement-type statement) 'function) ; declaring a function is similar to declaring a variable
-       (state-declare-and-set (funcdec-name statement) statement state))))) ; since the statement is the same as the function description, save the entire statement
+      ((eq? (statement-type statement) 'function) ; declaring a function is similar to declaring a variable, we just bind the closure to the name
+       (state-declare-and-set (funcdec-name statement) (make-closure statement (lambda (v) (state-get-bottom-n-layers (num-layers state) v))) state)))))
 
 ; check if a declaration also contains an assignment
 (define has-value? (lambda (l) (pair? (cddr l))))
@@ -219,6 +219,11 @@
 (define funcdec-formals caddr)
 (define funcdec-text cadddr) ; the actual code run inside of a function
 
+; macros for function closures
+(define closure-formals car)
+(define closure-text cadr)
+(define closure-environment-function caddr)
+
 ; macros for value (prefix notation)
 (define operator car)
 (define arguments cdr)
@@ -290,24 +295,34 @@
 ; TODO make it so it only gets the part of the state that's in scope
 (define mv-function
   (lambda (name args state)
-    (evaluate-call/cc (funcdec-text (state-get name state)) (function-env name args state))))
+    ((lambda (closure)
+      (evaluate-call/cc (closure-text closure) (function-make-env closure args state)))
+     (state-get name state))))
 
 (define ms-function
   (lambda (name args state)
-    (other-layers (evaluate-state-call/cc (funcdec-text (state-get name state)) (function-env name args state)))))
+    (other-layers
+     ((lambda (closure)
+        (evaluate-state-call/cc (closure-text closure) (function-make-env closure args state)))
+      (state-get name state)))))
+
+; create the function closure from the function declaration and the given environment production function (which takes a state)
+(define make-closure
+  (lambda (declaration environment-function)
+    (append (cddr declaration) (list environment-function))))
 
 ; bind actual params to formal params and include these bindings in a state containing all variables in scope (adding a new layer)
-(define function-env
-  (lambda (name args state)
-    (function-build-env args (function-formals name state) (add-layer state))))
+(define function-make-env
+  (lambda (closure args state)
+    (function-build-env (add-layer ((closure-environment-function closure) state)) args (closure-formals closure) state)))
 
 ; recursively bind a list of function arguments to their respective formal parameters
 (define function-build-env
-  (lambda (args formals state)
+  (lambda (environment args formals state)
     (cond
-      ((and (null? args) (null? formals)) state)
+      ((and (null? args) (null? formals)) environment)
       ((or  (null? args) (null? formals)) (error 'arguments "Wrong number of arguments provided"))
-      (else (state-declare-and-set (car formals) (M_value (car args) state) (function-build-env (cdr args) (cdr formals) state))))))
+      (else (state-declare-and-set (car formals) (M_value (car args) state) (function-build-env environment (cdr args) (cdr formals) state))))))
 
 ; return a list of the formal parameters of a given function in a given state
 (define function-formals
@@ -327,6 +342,7 @@
 (define add-layer (lambda (state) (cons new-layer state)))
 (define top-layer car)
 (define other-layers cdr)
+(define num-layers length)
 
 (define state-get
   (lambda (name state)
@@ -349,6 +365,14 @@
 (define state-declare-and-set
   (lambda (name value state)
     (state-set name value (state-declare name state))))
+
+; used for static scoping
+(define state-get-bottom-n-layers
+  (lambda (n state)
+    (cond
+      ((< (num-layers state) n) (error n "Not enough layers in the given state"))
+      ((= (num-layers state) n) state)
+      (else (state-get-bottom-n-layers n (other-layers state))))))
 
 (define state-add-bottom-return
   (lambda (value state)
@@ -493,7 +517,7 @@ TODO - implement new layer-get, layer-set
     (cond
       ((null? (names layer)) (list (list name) (list (box null))))
       ((eq? name 'return) (error "'return cannot be used as a variable name"))
-      ((eq? name (car (names layer))) (error 'declared "Variable is already declared"))
+      ((eq? name (car (names layer))) (error (car (names layer)) "Variable is already declared"))
       (else (layer-cons (layer-car layer) (layer-declare name (layer-cdr layer)))))))
 
 ; creates a name-value pair in a given layer that represents the return value of the layer
