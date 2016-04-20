@@ -5,22 +5,21 @@
 ; Language: Pretty Big
 ; To run a program, run (interpret <filename>)
 
-(load "functionParser.scm")
+(load "classParser.scm")
 
 ; ; ; ; ; ; ; ;
 ; INTERPRETER ;
 ; ; ; ; ; ; ; ;
 ; This section contains the high-level program interpretation and evaluation functions
 
-(define empty-state '((()())))
+(define empty-state '((()()) (()())) )
 (define main-call '(funcall main))
 
 (define interpret
-  (lambda (filename)
-    ((lambda (program)
-       (return-main program (make-outer-layer program empty-state)))
-     (parser filename))))
-     
+  (lambda (filename classname)
+    ((lambda (program cname state)
+       (return-main (state-get-class cname state) (load-classes program state)))
+     (parser filename) classname)))
 
 ; create the outer layer of the program state
 (define make-outer-layer
@@ -31,10 +30,10 @@
 
 ; return the value returned by the main method
 (define return-main
-  (lambda (program state)
-    (M_value main-call state)))
-
-; get the return value of the program
+  (lambda (class state)
+    (M_value main-call (state-get 'main (methods class)))))
+    
+; return the return value resulting from executing a list of statements and a given global state
 (define evaluate-call/cc
   (lambda (program state)
     (call/cc
@@ -49,7 +48,7 @@
                           (else (loop (rest-statements program) (M_state (next-statement program) state)))))))
          (loop program state))))))
 
-; return the state resulting from executing the list of statements in program.
+; return the global state resulting from executing a list of statements and a given global state
 (define evaluate-state-call/cc
   (lambda (program state)
     (call/cc
@@ -62,6 +61,12 @@
                               ((null? program) state)
                               (else (loop (rest-statements program) (M_state (next-statement program) state)))))))
                 (loop program state))))))
+
+; returns a state containing all class definitions from a program
+(define load-classes
+  (lambda (program state)
+    ((null? program) state)
+    (else (load-classes (rest-statements program) (state-add-class (cadr (first-statement program)) (make-class-def (first-statement prorgam) state) state)))))
 
 ; macros for program evaluation
 (define next-statement car)
@@ -439,6 +444,21 @@
       ((null? state) (error "The state contains no continue indicator."))
       ((layer-has-continue? (top-layer state)) (list (layer-remove-continue (top-layer state))))
       (else (cons (top-layer state) (state-remove-continue (other-layers state)))))))
+
+; getter and setter for class definitions stored on the bottom layer of an environment
+(define state-add-class
+  (lambda (cname class state)
+    (cond
+      ((null? state) (error "State has no global layer"))
+      ((null? (other-layers state)) (list (layer-set cname class (layer-declare cname (top-layer state)))))
+      (else (state-add-class cname class (other-layers state))))))
+
+(define state-get-class
+  (lambda (cname state)
+    (cond
+      ((null? state) (error "State has no global layer"))
+      ((null? (other-layers state)) (layer-get cname (top-layer state)))
+      (else (state-get-class cname (other-layers state))))))
 
 ; ; ; ; ;
 ; LAYER ;
