@@ -67,7 +67,7 @@
   (lambda (program state)
     (cond
     ((null? program) state)
-    (else (load-classes (rest-statements program) (state-add-class (cadr (next-statement program)) (make-class-def (next-statement program) state) state))))))
+    (else (load-classes (rest-statements program) (state-add-class (cadr (next-statement program)) (add-class-def (next-statement program) state) state))))))
 
 ; macros for program evaluation
 (define next-statement car)
@@ -323,7 +323,7 @@
 ; get the closure for a given function
 (define lookup-closure
   (lambda (oexpr function-id environment)
-    (if (is-object? oexpr environment)
+    (if (list? oexpr)
         (lookup-closure-in-class-def function-id (state-get (true-type oexpr) environment)) ; oexpr is an object definition
         (lookup-closure-in-class-def function-id (state-get oexpr environment))))) ; oexpr is the name of a class
 
@@ -353,15 +353,16 @@
 ; ; ; ; ;
 ; CLASS ;
 ; ; ; ; ;
-; This section contains functions which create and access class definitions
+; This section contains functions which create, access, and modify class definitions
 
 ; a class definition is a list of the following in the given order:
 ; 1. the superclass name
-; 2. a list of instance fields
+; 2. a list of instance fields (in reverse-declared order)
 ; 3. a list (environment) of methods (names bound to closures)
 
 (define empty-class-def (list '() '() empty-state))
 
+; macros for accessing parts of a class declaration statement
 (define class-dec-name cadr)
 (define class-dec-super (lambda (x)
                           (if (pair? (caddr x))
@@ -369,7 +370,7 @@
                               '())))
 (define class-dec-body cadddr)
 
-(define make-class-def
+(define add-class-def
   (lambda (statement state)
     (state-add-class (class-dec-name statement)
                      (class-def-builder (class-dec-body statement)
@@ -415,6 +416,42 @@
 (define superclass car)
 (define instance-fields cadr)
 (define methods caddr)
+
+; ; ; ; ; ;
+; OBJECT  ;
+; ; ; ; ; ;
+; Create, access, and modify object definitions
+
+; an object definition is a list of the following in the given order:
+; 1. the true type name
+; 2. a list of instance field values (in reverse-declared order)
+
+; add an object definition to a state
+(define add-object-def
+  (lambda (name true-type state)
+    (state-declare-and-set name (construct-object true-type state) state)))
+
+; construct and return an object definition from its declaration
+; (this is our generic constructor)
+(define construct-object
+  (lambda (true-type state)
+    (object-def-builder (list true-type '()) (length (instance-fields (state-get-class true-type state))))))
+
+(define object-def-builder
+  (lambda (object-def num-field-values)
+    (if (eq? num-field-values 0)
+        object-def
+        (object-def-builder (list (true-type object-def) (cons (box null) (instance-values object-def))) (- num-field-values 1)))))
+
+; set an object's instance field by name
+(define set-field
+  (lambda (name val object state)
+    (state-set name val (make-field-environment object state))))
+
+(define make-field-environment
+  (lambda (object state)
+    (list (cons (instance-fields (state-get-class (true-type (state-get object state)) state))
+          (list (instance-values (state-get object state)))))))
 
 ; macros for accessing parts of objects
 (define true-type car)
