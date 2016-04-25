@@ -12,7 +12,7 @@
 ; ; ; ; ; ; ; ;
 ; This section contains the high-level program interpretation and evaluation functions
 
-(define empty-state '((()())))
+(define empty-state '((()()) (()())) )
 (define main-call '(funcall main))
 
 (define interpret
@@ -339,24 +339,42 @@
 ; 2. a list (environment) containing state fields and values
 ; 3. a list of instance fields
 ; 4. a list (environment) of methods (names bound to closures)
-; 5. a list of constructors
+
+(define empty-class-def (list '() empty-state '() empty-state))
   
 (define make-class-def
-  (lambda (statement state)
-    #t)) ; TODO, obviously
+  (lambda (statement class-name state)
+    #t))
 
+(define class-def-builder
+  (lambda (body class-name class-def state)
+    (cond
+      ((eq? (statement-type (next-statement body)) 'var) #t)
+      ((eq? (statement-type (next-statement body)) 'function) (class-def-builder
+                                                               (rest-statements body)
+                                                               (add-function (next-statement body) class-def state)
+                                                               (state-set class-name (add-function (next-statement body)
+                                                                                                   class-def state) state))) ; function definitions
+      (else (error (statement-type (next-statement body)) "This construct is not supported in class definitions")))))
+
+(define add-function
+  (lambda (statement class-def state)
+    (if (eq? (statement-type statement) 'function)
+        (list (list (superclass class-def)) (state-fields-and values class-def) (instance-fields class-def)
+              (state-declare-and-set (funcdec-name statement) (make-closure statement (lambda (v) (state-get-bottom-n-layers (num-layers state) v))) state))
+        (error (statement-type statement) "Wrong type of statement"))))
+        
+; macros for accessing class definitions
 (define superclass caar)
 (define state-fields-and-values cadr)
 (define instance-fields caddr)
 (define methods cadddr)
-(define constructors (lambda (v) (car (cddddr v)))) ; caddddr, which is not in Pretty Big
 
 ; ; ; ; ;
 ; STATE ;
 ; ; ; ; ;
 ; This section contains functions which modify and examine states
 
-(define new-state '( ( () () ) ))
 (define new-layer '(()()))
 
 (define sample-state (list (list (list 'x 'z)(list (box 2) (box 4)))(list (list 'y 'a)(list (box 3) (box 5)))))
