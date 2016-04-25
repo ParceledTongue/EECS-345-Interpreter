@@ -320,11 +320,17 @@
   (lambda (declaration environment-function class-function)
     (append (cddr declaration) (list environment-function) (list class-function))))
 
+; get the closure for a given function
 (define lookup-closure
   (lambda (oexpr function-id environment)
-    (if (list? oexpr)
-        #t ; oexpr is an object definition
-        #f))) ; oexpr is the name of a class
+    (if (is-object? oexpr environment)
+        (lookup-closure-in-class-def function-id (state-get (true-type oexpr) environment)) ; oexpr is an object definition
+        (lookup-closure-in-class-def function-id (state-get oexpr environment))))) ; oexpr is the name of a class
+
+; get a function closure from a class definition
+(define lookup-closure-in-class-def
+  (lambda (function-id class-def)
+    (state-get function-id (methods class-def))))
 
 ; bind actual params to formal params and include these bindings in a state containing all variables in scope (adding a new layer)
 (define function-make-env
