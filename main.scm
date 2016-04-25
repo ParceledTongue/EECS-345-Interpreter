@@ -18,8 +18,8 @@
 (define interpret
   (lambda (filename classname)
     ((lambda (program cname state)
-       (return-main (state-get-class cname state) (load-classes program state)))
-     (parser filename) classname)))
+       (return-main (state-get-class cname state) state))
+     (parser filename) classname (load-classes (parser filename) empty-state))))
 
 ; create the outer layer of the program state
 (define make-outer-layer
@@ -30,8 +30,8 @@
 
 ; return the value returned by the main method
 (define return-main
-  (lambda (class state)
-    (M_value main-call (state-get 'main (methods class)))))
+  (lambda (class-def state)
+    (M_value main-call (methods class-def))))
     
 ; return the return value resulting from executing a list of statements and a given global state
 (define evaluate-call/cc
@@ -65,8 +65,9 @@
 ; returns a state containing all class definitions from a program
 (define load-classes
   (lambda (program state)
-    ((null? program) state)
-    (else (load-classes (rest-statements program) (state-add-class (cadr (first-statement program)) (make-class-def (first-statement prorgam) state) state)))))
+    (cond
+      ((null? program) state)
+      (else (load-classes (rest-statements program) (make-class-def (next-statement program) state))))))
 
 ; macros for program evaluation
 (define next-statement car)
@@ -111,7 +112,9 @@
       ((eq? (statement-type statement) 'funcall)
        (ms-function (funcall-name statement) (funcall-args statement) state))
       ((eq? (statement-type statement) 'function) ; declaring a function is similar to declaring a variable, we just bind the closure to the name
-       (state-declare-and-set (funcdec-name statement) (make-closure statement (lambda (v) (state-get-bottom-n-layers (num-layers state) v))) state)))))
+       (state-declare-and-set (funcdec-name statement) (make-closure statement (lambda (v) (state-get-bottom-n-layers (num-layers state) v))) state))
+      ((eq? (statement-type statement) 'class)
+       (make-class-def statement state)))))
 
 ; check if a declaration also contains an assignment
 (define has-value? (lambda (l) (pair? (cddr l))))
@@ -348,7 +351,11 @@
 (define empty-class-def (list '(Object) empty-state '() empty-state))
 
 (define class-dec-name cadr)
-(define class-dec-super (lambda (x) (car (cdaddr x))))
+(define class-dec-super
+  (lambda (x)
+    (if (null? (caddr x))
+               null
+               (car (cdaddr x)))))
 (define class-dec-body cadddr)
 
 (define make-class-def
@@ -365,7 +372,7 @@
     (cond
       ((null? body) class-def)
       ((eq? (statement-type (next-statement body)) 'var) #t)
-      ((eq? (statement-type (next-statement body)) 'function) (class-def-builder
+      ((or (eq? (statement-type (next-statement body)) 'function) (eq? (statement-type (next-statement body)) 'static-function)) (class-def-builder
                                                                (rest-statements body)
                                                                class-name
                                                                (add-function (next-statement body) class-def state)
@@ -375,7 +382,7 @@
 
 (define add-function
   (lambda (statement class-def state)
-    (if (eq? (statement-type statement) 'function)
+    (if (or (eq? (statement-type statement) 'function) (eq? (statement-type statement) 'static-function))
         (list (list (superclass class-def)) (state-fields-and-values class-def) (instance-fields class-def)
               (state-declare-and-set (funcdec-name statement) (make-closure statement (lambda (v) (state-get-bottom-n-layers (num-layers state) v))) (methods class-def)))
         (error (statement-type statement) "Wrong type of statement"))))
