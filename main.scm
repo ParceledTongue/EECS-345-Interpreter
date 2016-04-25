@@ -19,7 +19,7 @@
   (lambda (filename classname)
     ((lambda (program cname state)
        (return-main (state-get-class cname state) (load-classes program state)))
-     (parser filename) classname)))
+     (parser filename) classname empty-state)))
 
 ; create the outer layer of the program state
 (define make-outer-layer
@@ -67,7 +67,7 @@
   (lambda (program state)
     (cond
     ((null? program) state)
-    (else (load-classes (rest-statements program) (state-add-class (cadr (first-statement program)) (make-class-def (first-statement prorgam) state) state))))))
+    (else (load-classes (rest-statements program) (state-add-class (cadr (next-statement program)) (make-class-def (next-statement program) state) state))))))
 
 ; macros for program evaluation
 (define next-statement car)
@@ -112,7 +112,7 @@
       ((eq? (statement-type statement) 'funcall)
        (ms-function (funcall-name statement) (funcall-args statement) state))
       ((eq? (statement-type statement) 'function) ; declaring a function is similar to declaring a variable, we just bind the closure to the name
-       (state-declare-and-set (funcdec-name statement) (make-closure statement (lambda (v) (state-get-bottom-n-layers (num-layers state) v))) state)))))
+       (state-declare-and-set (funcdec-name statement) (make-closure statement (lambda (v) (state-get-bottom-n-layers (num-layers state) v)) (lambda (state) (state-get-class classname state))) state)))))
 
 ; check if a declaration also contains an assignment
 (define has-value? (lambda (l) (pair? (cddr l))))
@@ -317,8 +317,8 @@
 
 ; create the function closure from the function declaration and the given environment production function (which takes a state)
 (define make-closure
-  (lambda (declaration environment-function)
-    (append (cddr declaration) (list environment-function))))
+  (lambda (declaration environment-function class-function)
+    (append (cddr declaration) (list environment-function) (list class-function))))
 
 ; bind actual params to formal params and include these bindings in a state containing all variables in scope (adding a new layer)
 (define function-make-env
@@ -371,24 +371,25 @@
     (cond
       ((null? body) class-def)
       ((eq? (statement-type (next-statement body)) 'var) (class-def-builder
-                                                          (rest-statements body)
-                                                          class-name
-                                                          (add-field (next-statement body) class-def state)
-                                                          (state-set class-name (add-field (next-statement body)
-                                                                                              class-def state) state)))
-      ((eq? (statement-type (next-statement body)) 'function) (class-def-builder
-                                                               (rest-statements body)
-                                                               class-name
-                                                               (add-function (next-statement body) class-def state)
-                                                               (state-set class-name (add-function (next-statement body)
-                                                                                                   class-def state) state))) ; function definitions
+          (rest-statements body)
+          class-name
+          (add-field (next-statement body) class-def state)
+          (state-set class-name (add-field (next-statement body)
+                                              class-def state) state)))
+      ((or (eq? (statement-type (next-statement body)) 'function) (eq? (statement-type (next-statement body)) 'static-function)) (class-def-builder
+         (rest-statements body)
+         class-name
+         (add-function (next-statement body) class-name class-def state)
+         (state-set class-name (add-function (next-statement body) class-name class-def state) state))) ; function definitions
       (else (error (statement-type (next-statement body)) "This construct is not supported in class definitions")))))
 
 (define add-function
-  (lambda (statement class-def state)
-    (if (eq? (statement-type statement) 'function)
+  (lambda (statement class-name class-def state)
+    (if (or (eq? (statement-type statement) 'function) (eq? (statement-type statement) 'static-function))
         (list (superclass class-def) (instance-fields class-def)
-              (state-declare-and-set (funcdec-name statement) (make-closure statement (lambda (v) (state-get-bottom-n-layers (num-layers state) v))) (methods class-def)))
+              (state-declare-and-set (funcdec-name statement) (make-closure statement
+                  (lambda (v) (state-get-bottom-n-layers (num-layers state) v))
+                  (lambda (state) (state-get-class class-name state))) (methods class-def)))
         (error (statement-type statement) "Wrong type of statement"))))
 
 (define add-field
@@ -397,11 +398,72 @@
         (list (superclass class-def) (cons (dec-var statement) (instance-fields class-def))
               (methods class-def))
         (error (statement-type statement) "Wrong type of statement"))))
-        
+
 ; macros for accessing class definitions
 (define superclass car)
 (define instance-fields cadr)
 (define methods caddr)
+
+; macros for accessing parts of objects
+(define true-type car)
+(define instance-values cadr)
+
+; THE DOT OPERATOR
+
+(define function? ; is a function closure
+  (lambda (x state)
+    (and
+      (not (pair? x))
+      (list? (state-get x state))
+      (eq? (length (state-get x state)) 3))))
+
+(define class-def?
+  (lambda (x state)
+    (and
+      (not (pair? x))
+      (list? (state-get x state))
+      (eq? (length (state-get x state)) 4))))
+
+(define is-object?
+  (lambda (x state)
+    (and
+      (not (pair? x))
+      (list? (state-get x state))
+      (eq? (length (state-get x state)) 2))))
+
+; takes the left hand side of a dot operator and returns the current type
+(define ldot-class-type
+  (lambda (statement state classname instance)
+    (cond
+      ((function? (statement state)) (true-type (M_value statement state classname instance)))
+      ((is-object? (statement state)) (true-type (M_value statement state classname instance)))
+      ((class-def? (statement state)) #f) ; TODO
+      ((eq? (operator statement) 'new) (operand1 statement))
+      ((eq? (operator statement) 'this) classname)
+      ((eq? (operator statement) 'super) (superclass instance))
+      ((state-get (statement state)) (true-type (state-get (statement state))))
+      (else (error 'unknown "Can't use the dot operator on this type")))))
+
+(define ldot-contents
+  (lambda (statement state classname instance)
+  (cond
+    ((function? (statement state)) (M_value statement state classname instance))
+    ((is-object? (statement state)) (M_value statement state classname instance))
+    ((class-def? (statement state)) (statement state)) ; TODO
+    ((eq? (operator statement) 'new) (M_value statement state classname instance))
+    ((eq? (operator statement) 'this) (M_value statement state classname instance))
+    ((eq? (operator statement) 'super) (M_value statement state classname instance))
+    ((state-get (statement state)) (state-get (statement state)))
+    (else (error 'unknown "Can't use the dot operator on this type")))))
+
+;An object. Can come from...
+;A variable / field
+;A method call
+;new
+;this
+;A class name
+;Super
+
 
 ; ; ; ; ;
 ; STATE ;
