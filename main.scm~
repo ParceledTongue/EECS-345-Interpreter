@@ -330,28 +330,6 @@
     (funcdec-formals (state-get name state))))
 
 ; ; ; ; ;
-; CLASS ;
-; ; ; ; ;
-; This section contains functions which create and access class definitions
-
-; a class definition is a list of the following lists in the given order:
-; 1. a list containing the superclass name
-; 2. a list (environment) containing state fields and values
-; 3. a list of instance fields
-; 4. a list (environment) of methods (names bound to closures)
-; 5. a list of constructors
-  
-(define make-class-def
-  (lambda (statement state)
-    #t)) ; TODO, obviously
-
-(define superclass caar)
-(define state-fields-and-values cadr)
-(define instance-fields caddr)
-(define methods cadddr)
-(define constructors (lambda (v) (car (cddddr v)))) ; caddddr, which is not in Pretty Big
-
-; ; ; ; ;
 ; STATE ;
 ; ; ; ; ;
 ; This section contains functions which modify and examine states
