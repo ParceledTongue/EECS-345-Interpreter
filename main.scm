@@ -340,18 +340,27 @@
 ; 3. a list of instance fields
 ; 4. a list (environment) of methods (names bound to closures)
 
-(define empty-class-def (list '() empty-state '() empty-state))
-  
+(define empty-class-def (list '(Object) empty-state '() empty-state))
+
+(define class-dec-name cadr)
+(define class-dec-super (lambda (x) (car (cdaddr x))))
+(define class-dec-body cadddr)
+
 (define make-class-def
-  (lambda (statement class-name state)
-    #t))
+  (lambda (statement state)
+    (class-def-builder (class-dec-body statement)
+                       (class-dec-name statement)
+                       (list (list (class-dec-super statement)) empty-state '() empty-state)
+                       (state-declare (class-dec-name statement) state))))
 
 (define class-def-builder
   (lambda (body class-name class-def state)
     (cond
+      ((null? body) state)
       ((eq? (statement-type (next-statement body)) 'var) #t)
       ((eq? (statement-type (next-statement body)) 'function) (class-def-builder
                                                                (rest-statements body)
+                                                               class-name
                                                                (add-function (next-statement body) class-def state)
                                                                (state-set class-name (add-function (next-statement body)
                                                                                                    class-def state) state))) ; function definitions
@@ -360,7 +369,7 @@
 (define add-function
   (lambda (statement class-def state)
     (if (eq? (statement-type statement) 'function)
-        (list (list (superclass class-def)) (state-fields-and values class-def) (instance-fields class-def)
+        (list (list (superclass class-def)) (state-fields-and-values class-def) (instance-fields class-def)
               (state-declare-and-set (funcdec-name statement) (make-closure statement (lambda (v) (state-get-bottom-n-layers (num-layers state) v))) state))
         (error (statement-type statement) "Wrong type of statement"))))
         
