@@ -348,15 +348,17 @@
 
 (define make-class-def
   (lambda (statement state)
-    (class-def-builder (class-dec-body statement)
-                       (class-dec-name statement)
-                       (list (list (class-dec-super statement)) empty-state '() empty-state)
-                       (state-declare (class-dec-name statement) state))))
+    (state-add-class (class-dec-name state)
+                     (class-def-builder (class-dec-body statement)
+                                        (class-dec-name statement)
+                                        (list (list (class-dec-super statement)) empty-state '() empty-state)
+                                        (state-declare (class-dec-name statement) state))
+                     state)))
 
 (define class-def-builder
   (lambda (body class-name class-def state)
     (cond
-      ((null? body) state)
+      ((null? body) class-def)
       ((eq? (statement-type (next-statement body)) 'var) #t)
       ((eq? (statement-type (next-statement body)) 'function) (class-def-builder
                                                                (rest-statements body)
@@ -370,7 +372,7 @@
   (lambda (statement class-def state)
     (if (eq? (statement-type statement) 'function)
         (list (list (superclass class-def)) (state-fields-and-values class-def) (instance-fields class-def)
-              (state-declare-and-set (funcdec-name statement) (make-closure statement (lambda (v) (state-get-bottom-n-layers (num-layers state) v))) state))
+              (state-declare-and-set (funcdec-name statement) (make-closure statement (lambda (v) (state-get-bottom-n-layers (num-layers state) v))) (methods class-def)))
         (error (statement-type statement) "Wrong type of statement"))))
         
 ; macros for accessing class definitions
