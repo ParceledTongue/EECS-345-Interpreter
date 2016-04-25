@@ -320,6 +320,12 @@
   (lambda (declaration environment-function class-function)
     (append (cddr declaration) (list environment-function) (list class-function))))
 
+(define lookup-closure
+  (lambda (oexpr function-id environment)
+    (if (list? oexpr)
+        #t ; oexpr is an object definition
+        #f))) ; oexpr is the name of a class
+
 ; bind actual params to formal params and include these bindings in a state containing all variables in scope (adding a new layer)
 (define function-make-env
   (lambda (closure args state)
