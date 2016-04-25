@@ -32,7 +32,7 @@
 (define return-main
   (lambda (class state)
     (M_value main-call (state-get 'main (methods class)))))
-    
+
 ; return the return value resulting from executing a list of statements and a given global state
 (define evaluate-call/cc
   (lambda (program state)
@@ -65,8 +65,9 @@
 ; returns a state containing all class definitions from a program
 (define load-classes
   (lambda (program state)
+    (cond
     ((null? program) state)
-    (else (load-classes (rest-statements program) (state-add-class (cadr (first-statement program)) (make-class-def (first-statement prorgam) state) state)))))
+    (else (load-classes (rest-statements program) (state-add-class (cadr (first-statement program)) (make-class-def (first-statement prorgam) state) state))))))
 
 ; macros for program evaluation
 (define next-statement car)
@@ -79,21 +80,21 @@
 
 ; M_state
 (define M_state
-  (lambda (statement state)
+  (lambda (statement state classname instance)
     (cond
       ((null? statement) state) ; no statement
       ((eq? (statement-type statement) 'var) ; declaration
        (if (eq? (length statement) 2)
            (state-declare (dec-var statement) state) ; declaration without assignment
-           (state-set (dec-var statement) (M_value (dec-value statement) state) (state-declare (dec-var statement) state)))) ; declaration with assignment
+           (state-set (dec-var statement) (M_value (dec-value statement) state classname instance) (state-declare (dec-var statement) state)))) ; declaration with assignment
       ((eq? (statement-type statement) '=) ; assignment
-       (state-set (dec-var statement) (M_value (dec-value statement) state) state))
+       (state-set (dec-var statement) (M_value (dec-value statement) state classname instance) state))
       ((eq? (statement-type statement) 'if) ; "if" statement
-       (M_state-if statement state))
+       (M_state-if statement state classname instance))
       ((eq? (statement-type statement) 'begin) ; code block that hasn't been examined yet
         (other-layers (evaluate-state-call/cc (arguments statement) (add-layer state))))
       ((eq? (statement-type statement) 'while) ; "while" statement
-       (M_state-while statement state))
+       (M_state-while statement state classname instance))
       ((eq? (statement-type statement) 'break) ; "break" instruction
        (state-add-bottom-break state))
       ((eq? (statement-type statement) 'continue) ; "continue" instruction
@@ -101,13 +102,13 @@
       ((eq? (statement-type statement) 'begin) ; code block that hasn't been examined yet
         (other-layers (evaluate-state-call/cc (arguments statement) (add-layer state))))
       ((eq? (statement-type statement) 'while) ; "while" statement
-       (M_state-while statement state))
+       (M_state-while statement state classname instance))
       ((eq? (statement-type statement) 'try)
-       (M_state-try (try-part statement) (catch-part statement) (finally-part statement) state))
+       (M_state-try (try-part statement) (catch-part statement) (finally-part statement) state classname instance))
       ((eq? (statement-type statement) 'throw)
-       (state-add-bottom-thrown (M_value (operand1 statement) state) state))
+       (state-add-bottom-thrown (M_value (operand1 statement) state classname instance) state))
       ((eq? (statement-type statement) 'return) ; "return" statement
-       (state-add-bottom-return (M_value (return-val statement) state) state))
+       (state-add-bottom-return (M_value (return-val statement) state classname instance) state))
       ((eq? (statement-type statement) 'funcall)
        (ms-function (funcall-name statement) (funcall-args statement) state))
       ((eq? (statement-type statement) 'function) ; declaring a function is similar to declaring a variable, we just bind the closure to the name
@@ -118,7 +119,7 @@
 
 ; M_state for while loops
 (define M_state-while
-  (lambda (statement state)
+  (lambda (statement state classname instance)
     (call/cc
      (lambda (break)
        (letrec ((loop (lambda (state)
@@ -127,87 +128,90 @@
                           ((state-has-break? state) (break (state-remove-break state)))
                           ((state-has-continue? state) (loop (state-remove-continue state)))
                           (else
-                           (if (eq? (M_value (condition statement) state) 'true)
+                           (if (eq? (M_value (condition statement) state classname instance) 'true)
                                (loop (evaluate-state-call/cc (list (while-body statement)) state))
                                (break state)))))))
          (loop state))))))
 
 ; M_state for if statements
 (define M_state-if
-  (lambda (statement state)
+  (lambda (statement state classname instance)
     (if (eq? (length statement) 3)
-           (if (eq? (M_value (condition statement) state) 'true) ; statement without "else" clause
-               (M_state (st-then statement) state) ; condition was true
+           (if (eq? (M_value (condition statement) state classname instance) 'true) ; statement without "else" clause
+               (M_state (st-then statement) state classname instance) ; condition was true
                state) ; condition was false (then we just return the state since there is no "else" clause)
-           (if (eq? (M_value (condition statement) state) 'true) ; statement with "else" clause
-               (M_state (st-then statement) state) ; condition was true
-               (M_state (st-else statement) state))))) ; condition was false
+           (if (eq? (M_value (condition statement) state classname instance) 'true) ; statement with "else" clause
+               (M_state (st-then statement) state classname instance) ; condition was true
+               (M_state (st-else statement) state classname instance))))) ; condition was false
 
 ; M_state for finally blocks
 (define M_state-finally
-  (lambda (finally state)
+  (lambda (finally state classname instance)
     (cond
       ((null? finally) state)
-      (else (M_state-finally (rest-statements finally) (M_state (next-statement finally) state))))))
+      (else (M_state-finally (rest-statements finally) (M_state (next-statement finally) state) classname instance)))))
 
 ; M_state for catch blocks
 (define M_state-catch
-  (lambda (cbody finally cstate)
+  (lambda (cbody finally cstate classname instance)
       (cond
         ((and (null? cbody) (null? finally)) cstate)
-        ((null? cbody) (M_state-finally (cadr finally) cstate))
-        (else (M_state-catch (rest-statements cbody) finally (M_state (next-statement cbody) cstate))))))
+        ((null? cbody) (M_state-finally (cadr finally) cstate classname instance))
+        (else (M_state-catch (rest-statements cbody) finally (M_state (next-statement cbody) cstate classname instance) classname instance)))))
 
 ; M_state for try blocks
 (define M_state-try
-  (lambda (body catch finally state)
+  (lambda (body catch finally state classname instance)
     (other-layers
      (call/cc
       (lambda (break)
-        (letrec ((loop (lambda (body catch finally state)
+        (letrec ((loop (lambda (body catch finally state classname instance)
                          (cond
                            ((state-has-return? state) (break state))
                            ((state-has-thrown? state) ;(break (M_state-catch catch finally (state-add-bottom-thrown (operand1 (next-statement body)) state))))
                             (break
                                (let* ((cbody (catch-contents catch)) (cvar (catch-var catch)) (cstate (state-set cvar (state-get 'thrown state) (state-declare cvar state))))
-                                 (M_state-catch (car cbody) finally cstate))));
-                           ((null? body) (break (M_state-finally (cadr finally) state)))
+                                 (M_state-catch (car cbody) finally cstate classname instance))));
+                           ((null? body) (break (M_state-finally (cadr finally) state classname instance)))
                            ((eq? (operator (next-statement body)) 'throw) (break
                                                                            (let* ((cbody (catch-contents catch)) (cvar (catch-var catch)) (cstate (state-set cvar (operand1 (next-statement body)) (state-declare cvar state))))
                                                                               (M_state-catch (car cbody) finally cstate)))); (state-add-bottom-thrown (operand1 (next-statement body)) state)))))
-                           (else (loop (rest-statements body) catch finally (M_state (next-statement body) state)))))))
-          (loop body catch finally (add-layer state))))))))
+                           (else (loop (rest-statements body) catch finally (M_state (next-statement body) state classname instance) classname instance))))))
+          (loop body catch finally (add-layer state) classname instance)))))))
 
 ; M_value
 (define M_value
-  (lambda (l state)
+  (lambda (l state classname instance)
     (cond
       ((number? l) l) ; input is a number
       ((eq? l 'true) 'true) ; input is the boolean value true
       ((eq? l 'false) 'false) ; input is the boolean value false
       ((symbol? l) (state-get l state)) ; input is a variable
       ; expressions
-      ((eq? (operator l) '+) (mv-operate l state +))
-      ((eq? (operator l) '-) (mv-operate l state -))
-      ((eq? (operator l) '*) (mv-operate l state *))
-      ((eq? (operator l) '/) (mv-operate l state quotient))
-      ((eq? (operator l) '%) (mv-operate l state remainder))
+      ((eq? (operator l) '+) (mv-operate l state + classname instance))
+      ((eq? (operator l) '-) (mv-operate l state - classname instance))
+      ((eq? (operator l) '*) (mv-operate l state * classname instance))
+      ((eq? (operator l) '/) (mv-operate l state quotient classname instance))
+      ((eq? (operator l) '%) (mv-operate l state remainder classname instance))
       ; assignment or declaration with assignment
-      ((eq? (operator l) '=) (M_value (dec-value l) state)) ; the value of an assignment is the value being assigned
-      ((and (eq? (operator l) 'var) (has-value? l)) (M_value (dec-value l) state)) ; declaration must include assignment
+      ((eq? (operator l) '=) (M_value (dec-value l) state classname instance)) ; the value of an assignment is the value being assigned
+      ((and (eq? (operator l) 'var) (has-value? l)) (M_value (dec-value l) state) classname instance) ; declaration must include assignment
       ; types of comparison
-      ((eq? (operator l) '==) (mb-compare l state =))
-      ((eq? (operator l) '>)  (mb-compare l state >))
-      ((eq? (operator l) '>=) (mb-compare l state >=))
-      ((eq? (operator l) '<)  (mb-compare l state <))
-      ((eq? (operator l) '<=) (mb-compare l state <=))
-      ((eq? (operator l) '!=) (mb-compare l state !=))
+      ((eq? (operator l) '==) (mb-compare l state = classname instance))
+      ((eq? (operator l) '>)  (mb-compare l state > classname instance))
+      ((eq? (operator l) '>=) (mb-compare l state >= classname instance))
+      ((eq? (operator l) '<)  (mb-compare l state < classname instance))
+      ((eq? (operator l) '<=) (mb-compare l state <= classname instance))
+      ((eq? (operator l) '!=) (mb-compare l state != classname instance))
       ; logical operations
-      ((eq? (operator l) '&&) (mb-and l state))
-      ((eq? (operator l) '||) (mb-or l state))
+      ((eq? (operator l) '&&) (mb-and l state classname instance))
+      ((eq? (operator l) '||) (mb-or l state classname instance))
       ((eq? (operator l) '!) (mb-not l state))
       ; function calls
-      ((eq? (operator l) 'funcall) (mv-function (funcall-name l) (funcall-args l) state)))))
+      ((eq? (operator l) 'funcall) (mv-function (funcall-name l) (funcall-args l) state classname instance))
+      ((eq? (operator l) 'this) instance)
+      ((eq? (operator l) 'super) (state-get-class (superclass (state-get-class (classname)))))
+      )))
 
 ; macros for statements
 (define statement-type car) ; the type of statement (e.g. "if", "=", "return", ...)
@@ -233,7 +237,7 @@
 (define operator car)
 (define arguments cdr)
 (define argument1 cadr)
-(define rest-arguments cddr)    
+(define rest-arguments cddr)
 (define operand1 cadr)
 (define operand2 caddr)
 (define trystmt2 caaddr)
@@ -248,25 +252,25 @@
 
 ; shorthand for all those binary operator functions (and unary -)
 (define mv-operate
-  (lambda (l state func)
+  (lambda (l state func classname instance)
     (cond
-      ((= (length l) 3) (mv-operate-binary l state func)) ; list has two operands
-      ((= (length l) 2) (mv-operate-unary l state func)) ; list has one operand
+      ((= (length l) 3) (mv-operate-binary l state func classname instance)) ; list has two operands
+      ((= (length l) 2) (mv-operate-unary l state func classname instance)) ; list has one operand
       (else (error "Only binary and unary operations are supported")))))
 
 (define mv-operate-binary
-  (lambda (l state func)
-    (func (M_value (operand1 l) state) (M_value (operand2 l) state))))
+  (lambda (l state func classname instance)
+    (func (M_value (operand1 l) state classname instance) (M_value (operand2 l) state classname instance))))
 
 (define mv-operate-unary
-  (lambda (l state func)
-    (func (M_value (operand1 l) state))))
+  (lambda (l state func classname instance)
+    (func (M_value (operand1 l) state classname instance))))
 
 ; shorthand for boolean comparisons
 ; (we cannot use mv-operate, because we want 'true and 'false rather than #t and #f)
 (define mb-compare
-  (lambda (l state func)
-    (if (func (M_value (operand1 l) state) (M_value (operand2 l) state))
+  (lambda (l state func classname instance)
+    (if (func (M_value (operand1 l) state classname instance) (M_value (operand2 l) state classname instance))
         'true
         'false)))
 
@@ -276,20 +280,20 @@
 
 ; functions for boolean "and", "or", and "not"
 (define mb-and
-  (lambda (l state)
-    (if (and (eq? (M_value(operand1 l) state) 'true) (eq? (M_value(operand2 l) state) 'true))
+  (lambda (l state classname instance)
+    (if (and (eq? (M_value(operand1 l) state classname instance) 'true) (eq? (M_value(operand2 l) state classname instance) 'true))
         'true
         'false)))
 
 (define mb-or
-  (lambda (l state)
-    (if (or (eq? (M_value(operand1 l) state) 'true) (eq? (M_value(operand2 l) state) 'true))
+  (lambda (l state classname instance)
+    (if (or (eq? (M_value(operand1 l) state classname instance) 'true) (eq? (M_value(operand2 l) state classname instance) 'true))
         'true
         'false)))
 
 (define mb-not
-  (lambda (l state)
-    (if (eq? (M_value(operand1 l) state) 'true)
+  (lambda (l state classname instance)
+    (if (eq? (M_value(operand1 l) state classname instance) 'true)
         'false
         'true)))
 
@@ -299,13 +303,13 @@
 ; (this is the umbrella function for this section)
 ; TODO make it so it only gets the part of the state that's in scope
 (define mv-function
-  (lambda (name args state)
+  (lambda (name args state classname instance)
     ((lambda (closure)
       (evaluate-call/cc (closure-text closure) (function-make-env closure args state)))
      (state-get name state))))
 
 (define ms-function
-  (lambda (name args state)
+  (lambda (name args state classname instance)
     (other-layers
      ((lambda (closure)
         (evaluate-state-call/cc (closure-text closure) (function-make-env closure args state)))
@@ -594,7 +598,7 @@ TODO - implement new layer-get, layer-set
         (else (layer-cons
                (layer-car layer)
                (layer-set name value (layer-cdr layer)))))))
-    
+
 
 ; creates a new name-value pair in a given layer with the given name and the value '(), and returns the new layer
 (define layer-declare
