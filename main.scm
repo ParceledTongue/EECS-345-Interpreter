@@ -353,7 +353,7 @@
 
 (define make-class-def
   (lambda (statement state)
-    (state-add-class (class-dec-name state)
+    (state-add-class (class-dec-name statement)
                      (class-def-builder (class-dec-body statement)
                                         (class-dec-name statement)
                                         (list (list (class-dec-super statement)) empty-state '() empty-state)
