@@ -502,7 +502,7 @@
     (cond
       ((null? state) (error "State has no global layer"))
       ((null? (other-layers state)) (list (layer-set cname class (layer-declare cname (top-layer state)))))
-      (else (state-add-class cname class (other-layers state))))))
+      (else (cons (top-layer state) (state-add-class cname class (other-layers state)))))))
 
 (define state-get-class
   (lambda (cname state)
