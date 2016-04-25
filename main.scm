@@ -348,7 +348,7 @@
 ; 2. a list of instance fields
 ; 3. a list (environment) of methods (names bound to closures)
 
-(define empty-class-def (list '() empty-state '() empty-state))
+(define empty-class-def (list '() '() empty-state))
 
 (define class-dec-name cadr)
 (define class-dec-super (lambda (x)
@@ -362,7 +362,7 @@
     (state-add-class (class-dec-name statement)
                      (class-def-builder (class-dec-body statement)
                                         (class-dec-name statement)
-                                        (list (class-dec-super statement) empty-state '() empty-state)
+                                        (list (class-dec-super statement) '() empty-state)
                                         (state-declare (class-dec-name statement) state))
                      state)))
 
@@ -387,22 +387,21 @@
 (define add-function
   (lambda (statement class-def state)
     (if (eq? (statement-type statement) 'function)
-        (list (superclass class-def) (state-fields-and-values class-def) (instance-fields class-def)
+        (list (superclass class-def) (instance-fields class-def)
               (state-declare-and-set (funcdec-name statement) (make-closure statement (lambda (v) (state-get-bottom-n-layers (num-layers state) v))) (methods class-def)))
         (error (statement-type statement) "Wrong type of statement"))))
 
 (define add-field
   (lambda (statement class-def state)
     (if (eq? (statement-type statement) 'var)
-        (list (superclass class-def) (state-fields-and-values class-def) (cons (dec-var statement) (instance-fields class-def))
+        (list (superclass class-def) (cons (dec-var statement) (instance-fields class-def))
               (methods class-def))
         (error (statement-type statement) "Wrong type of statement"))))
         
 ; macros for accessing class definitions
 (define superclass car)
-(define state-fields-and-values cadr)
-(define instance-fields caddr)
-(define methods cadddr)
+(define instance-fields cadr)
+(define methods caddr)
 
 ; ; ; ; ;
 ; STATE ;
