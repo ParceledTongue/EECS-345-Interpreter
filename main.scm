@@ -1,9 +1,9 @@
-; EECS 345 Project #3
+; EECS 345 Project #4
 ; Jonah Raider-Roth (jer135)
 ; Zachary Palumbo (ztp3)
 
 ; Language: Pretty Big
-; To run a program, run (interpret <filename>)
+; To run a program, run (interpret <filename> <classname>)
 
 (load "classParser.scm")
 
