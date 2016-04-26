@@ -211,6 +211,7 @@
       ((eq? (operator l) 'funcall) (mv-function (funcall-name l) (funcall-args l) state classname instance))
       ((eq? (operator l) 'this) instance)
       ((eq? (operator l) 'super) (state-get-class (superclass (state-get-class (classname)))))
+      ((eq? (operator l) 'new) )
       )))
 
 ; macros for statements
@@ -431,7 +432,7 @@
   (lambda (name true-type state)
     (state-declare-and-set name (construct-object true-type state) state)))
 
-; construct and return an object definition from its declaration
+; construct and return an object definition from its declaration5
 ; (this is our generic constructor)
 (define construct-object
   (lambda (true-type state)
@@ -446,7 +447,7 @@
 ; set an object's instance field by name
 (define set-field
   (lambda (name val object state)
-    (state-set name val (make-field-environment object state))))
+    (state-set object (state-set name val (make-field-environment object state)) state)))
 
 (define make-field-environment
   (lambda (object state)
